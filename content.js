@@ -11,12 +11,21 @@
 
   let enabled = true;
   let configured = false;
+  let includeQuoteUrl = false;
   let selectors = { ...DEFAULT_SELECTORS };
 
-  // Load custom selectors from storage
-  chrome.storage.local.get(["customSelectors"], (data) => {
+  // Load custom selectors and behavior settings from storage
+  chrome.storage.local.get(["customSelectors", "includeQuoteUrl"], (data) => {
     if (data.customSelectors) {
       selectors = { ...DEFAULT_SELECTORS, ...data.customSelectors };
+    }
+    includeQuoteUrl = !!data.includeQuoteUrl;
+  });
+
+  // Listen for setting changes (e.g. user toggles includeQuoteUrl while x.com is open)
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.includeQuoteUrl) {
+      includeQuoteUrl = !!changes.includeQuoteUrl.newValue;
     }
   });
 
@@ -146,6 +155,40 @@
     return results;
   }
 
+  // ─── Quote Tweet URL Extraction ─────────────────────────
+
+  /**
+   * Extract the URL of a quoted tweet from the compose area.
+   * Returns the quoted post URL or null.
+   */
+  function extractQuoteUrl() {
+    // Try the configurable selector first
+    const link = document.querySelector(selectors.quoteTweetLink);
+    if (link) {
+      const href = link.href;
+      const match = href.match(/https?:\/\/(x\.com|twitter\.com)\/[^/]+\/status\/\d+/);
+      if (match) return match[0];
+    }
+
+    // Fallback: look for any status link near the compose area
+    const textarea = getTextareaEl(0);
+    if (!textarea) return null;
+
+    let container = textarea;
+    for (let i = 0; i < PARENT_WALK_DEPTH; i++) {
+      if (!container.parentElement || container.parentElement === document.body) break;
+      container = container.parentElement;
+    }
+
+    const links = container.querySelectorAll('a[href*="/status/"]');
+    for (const a of links) {
+      const m = a.href.match(/https?:\/\/(x\.com|twitter\.com)\/[^/]+\/status\/\d+/);
+      if (m) return m[0];
+    }
+
+    return null;
+  }
+
   // ─── Thread Extraction ──────────────────────────────────
 
   /**
@@ -176,7 +219,19 @@
       }
     }
 
-    return posts.filter((p) => p.text || p.images.length > 0);
+    const filtered = posts.filter((p) => p.text || p.images.length > 0);
+
+    // Append quoted tweet URL to the first post if enabled
+    if (includeQuoteUrl && filtered.length > 0) {
+      const quoteUrl = extractQuoteUrl();
+      if (quoteUrl) {
+        filtered[0].text = filtered[0].text
+          ? filtered[0].text + "\n" + quoteUrl
+          : quoteUrl;
+      }
+    }
+
+    return filtered;
   }
 
   // ─── Post Button Handler ────────────────────────────────

@@ -33,6 +33,11 @@ const i18n = {
     resetSelectorsBtn: "デフォルトに戻す",
     msgSelectorsSaved: "セレクタを保存しました。ページを再読み込みすると反映されます。",
     msgSelectorsReset: "デフォルトに戻しました。",
+    selQuoteTweetLink: "引用ツイートリンク",
+    // Behavior
+    behaviorTitle: "投稿オプション",
+    includeQuoteUrlLabel: "引用 RT のリンクを Bluesky に含める",
+    includeQuoteUrlHint: "引用元ポストの X リンクをテキスト末尾に追加します",
     // History
     historyTitle: "投稿履歴",
     clearHistoryBtn: "クリア",
@@ -72,6 +77,11 @@ const i18n = {
     resetSelectorsBtn: "Reset to Defaults",
     msgSelectorsSaved: "Selectors saved. Reload the page to apply.",
     msgSelectorsReset: "Reset to defaults.",
+    selQuoteTweetLink: "Quote Tweet Link",
+    // Behavior
+    behaviorTitle: "Post Options",
+    includeQuoteUrlLabel: "Include quoted post URL on Bluesky",
+    includeQuoteUrlHint: "Appends the X link of the quoted post to the end of your text",
     // History
     historyTitle: "Post History",
     clearHistoryBtn: "Clear",
@@ -106,7 +116,7 @@ function applyLanguage() {
 
 // DEFAULT_SELECTORS is provided by shared.js (loaded before this file).
 
-const SELECTOR_KEYS = ["postButton", "tweetTextarea", "textSpan", "fallbackEditor"];
+const SELECTOR_KEYS = ["postButton", "tweetTextarea", "textSpan", "fallbackEditor", "quoteTweetLink"];
 
 // ─── DOM References ──────────────────────────────────────
 
@@ -120,13 +130,15 @@ const saveSelectorsBtn = document.getElementById("saveSelectors");
 const resetSelectorsBtn = document.getElementById("resetSelectors");
 const selectorMessageEl = document.getElementById("selectorMessage");
 
+const includeQuoteUrlToggle = document.getElementById("includeQuoteUrl");
+
 const clearHistoryBtn = document.getElementById("clearHistory");
 const historyListEl = document.getElementById("history-list");
 
 // ─── Load Settings ───────────────────────────────────────
 
 chrome.storage.local.get(
-  ["bskyHandle", "bskyAppPassword", "customSelectors"],
+  ["bskyHandle", "bskyAppPassword", "customSelectors", "includeQuoteUrl"],
   (data) => {
     if (data.bskyHandle) handleInput.value = data.bskyHandle;
     if (data.bskyAppPassword) passwordInput.value = data.bskyAppPassword;
@@ -137,6 +149,9 @@ chrome.storage.local.get(
       const el = document.getElementById(`sel-${key}`);
       if (el) el.value = custom[key] || DEFAULT_SELECTORS[key];
     }
+
+    // Behavior toggles
+    includeQuoteUrlToggle.checked = !!data.includeQuoteUrl;
 
     applyLanguage();
     loadHistory();
@@ -211,6 +226,12 @@ resetSelectorsBtn.addEventListener("click", () => {
   chrome.storage.local.remove("customSelectors", () => {
     showMessage(selectorMessageEl,t("msgSelectorsReset"));
   });
+});
+
+// ─── Behavior Toggles ───────────────────────────────────
+
+includeQuoteUrlToggle.addEventListener("change", () => {
+  chrome.storage.local.set({ includeQuoteUrl: includeQuoteUrlToggle.checked });
 });
 
 // ─── Post History ────────────────────────────────────────

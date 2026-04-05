@@ -8,4 +8,5 @@ const DEFAULT_SELECTORS = {
   tweetTextarea: '[data-testid="tweetTextarea_${n}"]',
   textSpan: '[data-text="true"]',
   fallbackEditor: '.DraftEditor-root [data-text="true"]',
+  quoteTweetLink: '[data-testid="quoteTweet"] a[role="link"][href*="/status/"]',
 };

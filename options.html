@@ -117,6 +117,48 @@
       color: #f4212e;
       display: block;
     }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .toggle {
+      position: relative;
+      width: 40px;
+      min-width: 40px;
+      height: 22px;
+    }
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle .slider {
+      position: absolute;
+      inset: 0;
+      background-color: #3a3b3c;
+      border-radius: 11px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .toggle .slider::before {
+      content: "";
+      position: absolute;
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #e7e9ea;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle input:checked + .slider {
+      background-color: #0085ff;
+    }
+    .toggle input:checked + .slider::before {
+      transform: translateX(18px);
+    }
     .security-note {
       margin-top: 24px;
       padding: 12px;
@@ -268,6 +310,21 @@
       • アプリパスワードは Bluesky の 設定 → プライバシーとセキュリティ → アプリパスワード からいつでも無効化できます。
     </div>
 
+    <!-- ─── Behavior Options ─── -->
+    <hr class="section-divider">
+    <h2 data-i18n="behaviorTitle">投稿オプション</h2>
+
+    <div class="row" style="padding: 8px 0;">
+      <div>
+        <label for="includeQuoteUrl" data-i18n="includeQuoteUrlLabel" style="font-size: 14px;">引用 RT のリンクを Bluesky に含める</label>
+        <div class="hint" data-i18n="includeQuoteUrlHint">引用元ポストの X リンクをテキスト末尾に追加します</div>
+      </div>
+      <div class="toggle">
+        <input type="checkbox" id="includeQuoteUrl">
+        <span class="slider"></span>
+      </div>
+    </div>
+
     <!-- ─── Advanced: DOM Selectors ─── -->
     <details class="advanced">
       <summary data-i18n="advancedTitle">⚙ 高度な設定 — DOM セレクタ</summary>
@@ -291,6 +348,10 @@
         <div class="field">
           <label for="sel-fallbackEditor" data-i18n="selFallback">フォールバックエディタ</label>
           <input type="text" id="sel-fallbackEditor">
+        </div>
+        <div class="field">
+          <label for="sel-quoteTweetLink" data-i18n="selQuoteTweetLink">引用ツイートリンク</label>
+          <input type="text" id="sel-quoteTweetLink">
         </div>
 
         <div class="selector-actions">
