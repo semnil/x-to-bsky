@@ -6,11 +6,9 @@
   "permissions": ["storage"],
   "host_permissions": [
     "https://bsky.social/*",
-    "https://*.bsky.network/*",
-    "https://www.youtube.com/*",
-    "https://youtu.be/*",
-    "https://i.ytimg.com/*"
+    "https://*.bsky.network/*"
   ],
+  "optional_host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js",
     "type": "module"

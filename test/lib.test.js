@@ -9,7 +9,7 @@ import {
   splitText,
   buildByteOffsetMap,
   parseFacets,
-  extractYouTubeUrl,
+  extractFirstUrl,
 } from "../lib.js";
 
 // Helper: compute UTF-8 byte length of a string
@@ -406,76 +406,74 @@ describe("parseFacets", () => {
   });
 });
 
-// ─── extractYouTubeUrl ──────────────────────────────────
+// ─── extractFirstUrl ──────────────────────────────────
 
-describe("extractYouTubeUrl", () => {
-  it("extracts standard youtube.com/watch URL", () => {
-    const result = extractYouTubeUrl("Check this https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-    expect(result).toEqual({ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", videoId: "dQw4w9WgXcQ" });
+describe("extractFirstUrl", () => {
+  it("extracts a simple URL", () => {
+    expect(extractFirstUrl("Check https://example.com for details")).toBe("https://example.com");
+  });
+
+  it("extracts YouTube watch URL", () => {
+    expect(extractFirstUrl("Check this https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+      .toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
   });
 
   it("extracts youtu.be short URL", () => {
-    const result = extractYouTubeUrl("Watch https://youtu.be/dQw4w9WgXcQ");
-    expect(result).toEqual({ url: "https://youtu.be/dQw4w9WgXcQ", videoId: "dQw4w9WgXcQ" });
+    expect(extractFirstUrl("Watch https://youtu.be/dQw4w9WgXcQ"))
+      .toBe("https://youtu.be/dQw4w9WgXcQ");
   });
 
-  it("extracts URL with additional parameters", () => {
-    const result = extractYouTubeUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s");
-    expect(result).toEqual({ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s", videoId: "dQw4w9WgXcQ" });
+  it("extracts URL with path and query", () => {
+    expect(extractFirstUrl("See https://example.com/page?q=1&r=2"))
+      .toBe("https://example.com/page?q=1&r=2");
   });
 
-  it("extracts URL without www prefix", () => {
-    const result = extractYouTubeUrl("https://youtube.com/watch?v=dQw4w9WgXcQ");
-    expect(result).toEqual({ url: "https://youtube.com/watch?v=dQw4w9WgXcQ", videoId: "dQw4w9WgXcQ" });
+  it("extracts YouTube playlist URL", () => {
+    expect(extractFirstUrl("Check https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf"))
+      .toBe("https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf");
   });
 
-  it("extracts playlist URL with null videoId", () => {
-    const result = extractYouTubeUrl("Check https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf");
-    expect(result).not.toBeNull();
-    expect(result.url).toBe("https://www.youtube.com/playlist?list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf");
-    expect(result.videoId).toBeNull();
+  it("extracts YouTube channel URL", () => {
+    expect(extractFirstUrl("https://www.youtube.com/@RickAstleyYT"))
+      .toBe("https://www.youtube.com/@RickAstleyYT");
   });
 
-  it("extracts channel URL with null videoId", () => {
-    const result = extractYouTubeUrl("https://www.youtube.com/@RickAstleyYT");
-    expect(result).not.toBeNull();
-    expect(result.videoId).toBeNull();
-  });
-
-  it("returns null for non-YouTube text", () => {
-    expect(extractYouTubeUrl("Hello world")).toBeNull();
+  it("returns null for text without URL", () => {
+    expect(extractFirstUrl("Hello world")).toBeNull();
   });
 
   it("returns null for empty string", () => {
-    expect(extractYouTubeUrl("")).toBeNull();
+    expect(extractFirstUrl("")).toBeNull();
   });
 
-  it("returns null for youtube.com top page", () => {
-    expect(extractYouTubeUrl("Visit https://www.youtube.com/ for videos")).toBeNull();
+  it("extracts only the first URL from multiple", () => {
+    expect(extractFirstUrl("https://a.com and https://b.com"))
+      .toBe("https://a.com");
   });
 
-  it("extracts only the first YouTube URL", () => {
-    const result = extractYouTubeUrl("https://youtu.be/aaaaaaaaaaa and https://youtu.be/bbbbbbbbbbb");
-    expect(result.videoId).toBe("aaaaaaaaaaa");
+  it("strips trailing period", () => {
+    expect(extractFirstUrl("Visit https://example.com."))
+      .toBe("https://example.com");
   });
 
-  it("prefers video URL over playlist URL in same text", () => {
-    const result = extractYouTubeUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ https://www.youtube.com/playlist?list=PLtest");
-    expect(result.videoId).toBe("dQw4w9WgXcQ");
+  it("strips trailing punctuation", () => {
+    expect(extractFirstUrl("Wow https://example.com!!"))
+      .toBe("https://example.com");
   });
 
-  it("strips trailing period from URL", () => {
-    const result = extractYouTubeUrl("Watch https://youtu.be/dQw4w9WgXcQ.");
-    expect(result.url).toBe("https://youtu.be/dQw4w9WgXcQ");
+  it("strips trailing parenthesis", () => {
+    expect(extractFirstUrl("(https://example.com)"))
+      .toBe("https://example.com");
   });
 
-  it("strips trailing punctuation from playlist URL", () => {
-    const result = extractYouTubeUrl("See https://www.youtube.com/playlist?list=PLtest,");
-    expect(result.url).toBe("https://www.youtube.com/playlist?list=PLtest");
+  it("extracts http URL", () => {
+    expect(extractFirstUrl("http://example.com"))
+      .toBe("http://example.com");
   });
 
-  it("strips trailing parenthesis from URL", () => {
-    const result = extractYouTubeUrl("(https://youtu.be/dQw4w9WgXcQ)");
-    expect(result.url).toBe("https://youtu.be/dQw4w9WgXcQ");
+  it("does not match angle-bracketed URLs (excluded by regex)", () => {
+    // The regex stops at > so the URL should still be extracted but < stops it
+    expect(extractFirstUrl("Visit <https://example.com> please"))
+      .toBe("https://example.com");
   });
 });

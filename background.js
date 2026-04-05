@@ -4,7 +4,7 @@ import {
   splitText,
   parseFacets,
   FACET_MENTION,
-  extractYouTubeUrl,
+  extractFirstUrl,
 } from "./lib.js";
 
 const BSKY_SERVICE = "https://bsky.social";
@@ -178,7 +178,10 @@ async function uploadThumbnail(imageUrl, accessJwt) {
   }
 }
 
-// ─── YouTube Link Card ──────────────────────────────────
+// ─── Link Card (OGP) ───────────────────────────────────
+
+const YOUTUBE_RE = /^https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\//;
+const OGP_FETCH_TIMEOUT = 5000;
 
 /**
  * Fetch YouTube oEmbed metadata for a video URL.
@@ -197,28 +200,164 @@ async function fetchYouTubeOEmbed(videoUrl) {
 }
 
 /**
- * Build an app.bsky.embed.external for a YouTube link.
- * Tries oEmbed for metadata/thumbnail; falls back to a plain link card.
+ * Decode common HTML entities (service worker has no DOMParser).
  */
-async function buildYouTubeEmbed(videoUrl, accessJwt, includeThumbnail = true) {
-  const meta = await fetchYouTubeOEmbed(videoUrl);
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec)));
+}
 
-  let thumbBlob = null;
-  if (includeThumbnail && meta?.thumbnail_url) {
-    thumbBlob = await uploadThumbnail(meta.thumbnail_url, accessJwt);
+/**
+ * Parse OGP meta tags from an HTML string (head portion only).
+ * Falls back to <title> and <meta name="description"> when OGP tags are absent.
+ */
+function parseOgpFromHtml(html) {
+  const headEnd = html.indexOf("</head>");
+  const head = headEnd > 0 ? html.slice(0, headEnd) : html.slice(0, 32768);
+
+  const getOg = (prop) => {
+    // Separate double/single quote patterns to avoid cross-quote truncation
+    const re = (q) => new RegExp(
+      `<meta[^>]*(?:property=${q}og:${prop}${q}[^>]*content=${q}([^${q}]*)${q}|content=${q}([^${q}]*)${q}[^>]*property=${q}og:${prop}${q})`, "i"
+    );
+    const m = head.match(re('"')) || head.match(re("'"));
+    return m ? decodeHtmlEntities(m[1] || m[2]) : "";
+  };
+
+  let title = getOg("title");
+  let description = getOg("description");
+  const image = getOg("image");
+
+  // Fallback: <title> tag
+  if (!title) {
+    const m = head.match(/<title[^>]*>([^<]*)<\/title>/i);
+    if (m) title = decodeHtmlEntities(m[1].trim());
+  }
+  // Fallback: <meta name="description">
+  if (!description) {
+    const descRe = (q) => new RegExp(
+      `<meta[^>]*(?:name=${q}description${q}[^>]*content=${q}([^${q}]*)${q}|content=${q}([^${q}]*)${q}[^>]*name=${q}description${q})`, "i"
+    );
+    const m = head.match(descRe('"')) || head.match(descRe("'"));
+    if (m) description = decodeHtmlEntities(m[1] || m[2]);
+  }
+
+  return { title, description, image };
+}
+
+/**
+ * Fetch OGP metadata from a URL.
+ * Reads only the first ~32 KB (up to </head>) to minimise bandwidth.
+ */
+async function fetchOgpMetadata(url) {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), OGP_FETCH_TIMEOUT);
+
+    const res = await fetch(url, {
+      headers: { Accept: "text/html" },
+      redirect: "follow",
+      signal: controller.signal,
+    });
+
+    if (!res.ok) { clearTimeout(timeoutId); return null; }
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("text/html") && !ct.includes("application/xhtml")) {
+      clearTimeout(timeoutId);
+      return null;
+    }
+
+    // Detect charset from Content-Type header (e.g. "text/html; charset=Shift_JIS")
+    const charsetMatch = ct.match(/charset=([^\s;]+)/i);
+    let encoding = charsetMatch ? charsetMatch[1] : "utf-8";
+
+    // Stream only the head portion
+    const reader = res.body.getReader();
+    let decoder;
+    try { decoder = new TextDecoder(encoding); } catch { decoder = new TextDecoder(); }
+    let html = "";
+    while (html.length < 32768) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+      if (html.includes("</head>")) break;
+    }
+    reader.cancel();
+    clearTimeout(timeoutId);
+
+    const ogp = parseOgpFromHtml(html);
+    if (!ogp.title && !ogp.description && !ogp.image) return null;
+
+    // Resolve relative og:image URL
+    if (ogp.image && !ogp.image.startsWith("http")) {
+      try { ogp.image = new URL(ogp.image, url).href; } catch { ogp.image = ""; }
+    }
+
+    return ogp;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if the extension has host permission for a URL's origin.
+ */
+async function hasHostPermission(url) {
+  try {
+    const origin = new URL(url).origin + "/*";
+    return await chrome.permissions.contains({ origins: [origin] });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Build an app.bsky.embed.external for any URL.
+ * Uses YouTube oEmbed as a fast path; falls back to generic OGP fetch.
+ * Checks host permission before fetching; skips if not granted.
+ */
+async function buildLinkEmbed(url, accessJwt, includeThumbnail = true) {
+  let title = "";
+  let description = "";
+  let imageUrl = null;
+
+  if (YOUTUBE_RE.test(url)) {
+    // YouTube oEmbed needs permission for www.youtube.com
+    if (await hasHostPermission("https://www.youtube.com/")) {
+      const meta = await fetchYouTubeOEmbed(url);
+      if (meta) {
+        title = meta.title || "";
+        description = meta.author_name ? `by ${meta.author_name}` : "";
+        imageUrl = meta.thumbnail_url || null;
+      }
+    }
+  } else {
+    if (await hasHostPermission(url)) {
+      const ogp = await fetchOgpMetadata(url);
+      if (ogp) {
+        title = ogp.title;
+        description = ogp.description;
+        imageUrl = ogp.image || null;
+      }
+    }
   }
 
   const embed = {
     $type: "app.bsky.embed.external",
-    external: {
-      uri: videoUrl,
-      title: meta?.title || "",
-      description: meta?.author_name ? `by ${meta.author_name}` : "",
-    },
+    external: { uri: url, title, description },
   };
-  if (thumbBlob) {
-    embed.external.thumb = thumbBlob;
+
+  if (includeThumbnail && imageUrl && await hasHostPermission(imageUrl)) {
+    const thumbBlob = await uploadThumbnail(imageUrl, accessJwt);
+    if (thumbBlob) embed.external.thumb = thumbBlob;
   }
+
   return embed;
 }
 
@@ -230,9 +369,10 @@ async function buildYouTubeEmbed(videoUrl, accessJwt, includeThumbnail = true) {
  * @param {Array} images - [{ base64, mimeType, alt }]
  * @param {object|null} parent - { uri, cid } of parent post (for reply chain)
  * @param {object|null} root - { uri, cid } of root post (for reply chain)
+ * @param {object|null} sess - pre-fetched session (avoids redundant auth in threads)
  */
-async function createPost(text, images = [], parent = null, root = null) {
-  const sess = await createSession();
+async function createPost(text, images = [], parent = null, root = null, sess = null) {
+  if (!sess) sess = await createSession();
 
   // Start independent async work in parallel: facet resolution + embed construction
   const rawFacets = parseFacets(text);
@@ -254,12 +394,12 @@ async function createPost(text, images = [], parent = null, root = null) {
       })),
     }));
   } else {
-    const yt = extractYouTubeUrl(text);
-    if (yt) {
-      embedPromise = chrome.storage.local.get(["includeYouTubeCard", "youtubeCardThumbnail"]).then(
-        ({ includeYouTubeCard, youtubeCardThumbnail }) =>
-          includeYouTubeCard !== false
-            ? buildYouTubeEmbed(yt.url, sess.accessJwt, youtubeCardThumbnail !== false)
+    const linkUrl = extractFirstUrl(text);
+    if (linkUrl) {
+      embedPromise = chrome.storage.local.get(["includeLinkCard", "linkCardThumbnail"]).then(
+        ({ includeLinkCard, linkCardThumbnail }) =>
+          includeLinkCard
+            ? buildLinkEmbed(linkUrl, sess.accessJwt, linkCardThumbnail !== false)
             : null
       ).catch(() => null);
     }
@@ -314,6 +454,8 @@ async function createPost(text, images = [], parent = null, root = null) {
  * @param {Array} thread - [{ text, images }]
  */
 async function postThread(thread) {
+  const sess = await createSession();
+
   // Expand: split any long posts into multiple chunks
   const expanded = [];
   for (const post of thread) {
@@ -332,7 +474,7 @@ async function postThread(thread) {
   let parent = null;
 
   for (const post of expanded) {
-    const result = await createPost(post.text, post.images, parent, root);
+    const result = await createPost(post.text, post.images, parent, root, sess);
     results.push(result);
     if (!root) root = result;
     parent = result;
@@ -377,4 +519,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     });
     return true;
   }
+});
+
+// ─── Settings Migration ─────────────────────────────────
+
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason !== "update") return;
+  chrome.storage.local.get(
+    ["includeLinkCard", "linkCardThumbnail", "includeYouTubeCard", "youtubeCardThumbnail"],
+    (data) => {
+      if (data.includeLinkCard !== undefined) return; // already migrated
+      if (data.includeYouTubeCard === undefined) return; // nothing to migrate
+      chrome.storage.local.set({
+        includeLinkCard: !!data.includeYouTubeCard,
+        linkCardThumbnail: data.youtubeCardThumbnail !== false,
+      });
+      chrome.storage.local.remove(["includeYouTubeCard", "youtubeCardThumbnail"]);
+    }
+  );
 });

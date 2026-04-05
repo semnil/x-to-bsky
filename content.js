@@ -23,7 +23,7 @@
     includeQuoteUrl = !!data.includeQuoteUrl;
   });
 
-  // Listen for setting changes (e.g. user toggles includeQuoteUrl while x.com is open)
+  // Listen for setting changes (e.g. user toggles while x.com is open)
   chrome.storage.onChanged.addListener((changes) => {
     if (changes.includeQuoteUrl) {
       includeQuoteUrl = !!changes.includeQuoteUrl.newValue;

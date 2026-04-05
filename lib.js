@@ -98,6 +98,16 @@ function buildByteOffsetMap(text) {
   return map;
 }
 
+// ─── URL Patterns ──────────────────────────────────────
+
+const URL_RE = /https?:\/\/[^\s\])<>]+/;
+const URL_RE_GLOBAL = new RegExp(URL_RE.source, "g");
+const TRAILING_PUNCT_RE = /[.,;:!?)]+$/;
+
+function cleanUrlMatch(raw) {
+  return raw.replace(TRAILING_PUNCT_RE, "");
+}
+
 // ─── Facet Parsing (no lookbehind) ──────────────────────
 
 /**
@@ -110,10 +120,10 @@ function parseFacets(text) {
   const byteMap = buildByteOffsetMap(text);
 
   // URL detection — strip trailing punctuation that is not part of the URL
-  const urlRegex = /https?:\/\/[^\s\])<>]+/g;
+  URL_RE_GLOBAL.lastIndex = 0;
   let match;
-  while ((match = urlRegex.exec(text)) !== null) {
-    let url = match[0].replace(/[.,;:!?]+$/, "");
+  while ((match = URL_RE_GLOBAL.exec(text)) !== null) {
+    let url = cleanUrlMatch(match[0]);
     const urlStart = match.index;
     facets.push({
       index: { byteStart: byteMap[urlStart], byteEnd: byteMap[urlStart + url.length] },
@@ -147,28 +157,17 @@ function parseFacets(text) {
   return facets;
 }
 
-// ─── YouTube URL Detection ─────────────────────────────
-
-const YOUTUBE_VIDEO_RE = /https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})(?:[&?][^\s]*)?/;
-const YOUTUBE_URL_RE = /https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\/[^\s/][^\s]*/;
+// ─── URL Detection ─────────────────────────────────────
 
 /**
- * Extract the first YouTube URL from text.
- * Returns { url, videoId } or null.
- * videoId is null for non-video YouTube URLs (playlists, channels, etc.)
+ * Extract the first URL from text.
+ * Returns the URL string or null.
  */
-function extractYouTubeUrl(text) {
-  const videoMatch = text.match(YOUTUBE_VIDEO_RE);
-  if (videoMatch) return { url: stripTrailingPunct(videoMatch[0]), videoId: videoMatch[1] };
-
-  const urlMatch = text.match(YOUTUBE_URL_RE);
-  if (urlMatch) return { url: stripTrailingPunct(urlMatch[0]), videoId: null };
-
-  return null;
-}
-
-function stripTrailingPunct(url) {
-  return url.replace(/[.,;:!?)]+$/, "");
+function extractFirstUrl(text) {
+  if (!text) return null;
+  const m = text.match(URL_RE);
+  if (!m) return null;
+  return cleanUrlMatch(m[0]);
 }
 
 // ─── Exports ────────────────────────────────────────────
@@ -183,5 +182,5 @@ export {
   splitText,
   buildByteOffsetMap,
   parseFacets,
-  extractYouTubeUrl,
+  extractFirstUrl,
 };

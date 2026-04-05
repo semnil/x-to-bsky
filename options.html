@@ -233,7 +233,7 @@
     <div class="security-note" data-i18n-html="securityNote">
       <strong>セキュリティについて</strong><br>
       • 認証情報は chrome.storage.local に保存され、この拡張のみがアクセスします。<br>
-      • 外部サーバーへの送信は一切行いません。通信先は bsky.social のみです。<br>
+      • 認証情報の送信先は bsky.social のみです。リンクカード有効時は対象 URL のメタデータを取得しますが、認証情報やユーザーデータは送信しません。<br>
       • アプリパスワードは Bluesky の 設定 → プライバシーとセキュリティ → アプリパスワード からいつでも無効化できます。
     </div>
 
@@ -254,22 +254,23 @@
 
     <div class="row" style="padding: 8px 0;">
       <div>
-        <label for="includeYouTubeCard" data-i18n="includeYouTubeCardLabel" style="font-size: 14px;">YouTube リンクカードを Bluesky に表示</label>
-        <div class="hint" data-i18n="includeYouTubeCardHint">YouTube リンクを含むポストにサムネイル付きカードを自動添付します</div>
+        <label for="includeLinkCard" data-i18n="includeLinkCardLabel" style="font-size: 14px;">リンクカードを Bluesky に表示</label>
+        <div class="hint" data-i18n="includeLinkCardHint">URL を含むポストにサムネイル付きリンクカードを自動添付します</div>
+        <div class="hint" data-i18n="includeLinkCardPermNote" style="margin-top: 2px; font-style: italic;"></div>
       </div>
       <label class="toggle">
-        <input type="checkbox" id="includeYouTubeCard" checked>
+        <input type="checkbox" id="includeLinkCard">
         <span class="slider"></span>
       </label>
     </div>
 
     <div class="row" style="padding: 4px 0 8px 24px;">
       <div>
-        <label for="youtubeCardThumbnail" data-i18n="youtubeCardThumbnailLabel" style="font-size: 13px;">サムネイル画像を含める</label>
-        <div class="hint" data-i18n="youtubeCardThumbnailHint">無効にするとタイトルのみのリンクカードになります</div>
+        <label for="linkCardThumbnail" data-i18n="linkCardThumbnailLabel" style="font-size: 13px;">サムネイル画像を含める</label>
+        <div class="hint" data-i18n="linkCardThumbnailHint">無効にするとタイトルのみのリンクカードになります</div>
       </div>
       <label class="toggle">
-        <input type="checkbox" id="youtubeCardThumbnail" checked>
+        <input type="checkbox" id="linkCardThumbnail" checked>
         <span class="slider"></span>
       </label>
     </div>
