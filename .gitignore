@@ -3,3 +3,4 @@ node_modules/
 .claude/
 icons/*.html
 icons/*.svg
+screenshots/
