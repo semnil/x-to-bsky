@@ -40,6 +40,8 @@ const i18n = {
     includeQuoteUrlHint: "引用元ポストの X リンクをテキスト末尾に追加します",
     includeYouTubeCardLabel: "YouTube リンクカードを Bluesky に表示",
     includeYouTubeCardHint: "YouTube リンクを含むポストにサムネイル付きカードを自動添付します",
+    youtubeCardThumbnailLabel: "サムネイル画像を含める",
+    youtubeCardThumbnailHint: "無効にするとタイトルのみのリンクカードになります",
     // History
     historyTitle: "投稿履歴",
     clearHistoryBtn: "クリア",
@@ -86,6 +88,8 @@ const i18n = {
     includeQuoteUrlHint: "Appends the X link of the quoted post to the end of your text",
     includeYouTubeCardLabel: "Show YouTube link cards on Bluesky",
     includeYouTubeCardHint: "Automatically attaches a thumbnail card when your post contains a YouTube link",
+    youtubeCardThumbnailLabel: "Include thumbnail image",
+    youtubeCardThumbnailHint: "When disabled, creates a title-only link card",
     // History
     historyTitle: "Post History",
     clearHistoryBtn: "Clear",
@@ -136,6 +140,7 @@ const selectorMessageEl = document.getElementById("selectorMessage");
 
 const includeQuoteUrlToggle = document.getElementById("includeQuoteUrl");
 const includeYouTubeCardToggle = document.getElementById("includeYouTubeCard");
+const youtubeCardThumbnailToggle = document.getElementById("youtubeCardThumbnail");
 
 const clearHistoryBtn = document.getElementById("clearHistory");
 const historyListEl = document.getElementById("history-list");
@@ -143,7 +148,7 @@ const historyListEl = document.getElementById("history-list");
 // ─── Load Settings ───────────────────────────────────────
 
 chrome.storage.local.get(
-  ["bskyHandle", "bskyAppPassword", "customSelectors", "includeQuoteUrl", "includeYouTubeCard"],
+  ["bskyHandle", "bskyAppPassword", "customSelectors", "includeQuoteUrl", "includeYouTubeCard", "youtubeCardThumbnail"],
   (data) => {
     if (data.bskyHandle) handleInput.value = data.bskyHandle;
     if (data.bskyAppPassword) passwordInput.value = data.bskyAppPassword;
@@ -158,6 +163,9 @@ chrome.storage.local.get(
     // Behavior toggles
     includeQuoteUrlToggle.checked = !!data.includeQuoteUrl;
     includeYouTubeCardToggle.checked = data.includeYouTubeCard !== false; // default ON
+    youtubeCardThumbnailToggle.checked = data.youtubeCardThumbnail !== false; // default ON
+    youtubeCardThumbnailToggle.closest(".row").style.opacity = includeYouTubeCardToggle.checked ? "1" : "0.4";
+    youtubeCardThumbnailToggle.disabled = !includeYouTubeCardToggle.checked;
 
     applyLanguage();
     loadHistory();
@@ -242,6 +250,12 @@ includeQuoteUrlToggle.addEventListener("change", () => {
 
 includeYouTubeCardToggle.addEventListener("change", () => {
   chrome.storage.local.set({ includeYouTubeCard: includeYouTubeCardToggle.checked });
+  youtubeCardThumbnailToggle.closest(".row").style.opacity = includeYouTubeCardToggle.checked ? "1" : "0.4";
+  youtubeCardThumbnailToggle.disabled = !includeYouTubeCardToggle.checked;
+});
+
+youtubeCardThumbnailToggle.addEventListener("change", () => {
+  chrome.storage.local.set({ youtubeCardThumbnail: youtubeCardThumbnailToggle.checked });
 });
 
 // ─── Post History ────────────────────────────────────────

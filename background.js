@@ -201,11 +201,11 @@ async function fetchYouTubeOEmbed(videoUrl) {
  * Build an app.bsky.embed.external for a YouTube link.
  * Tries oEmbed for metadata/thumbnail; falls back to a plain link card.
  */
-async function buildYouTubeEmbed(videoUrl, accessJwt) {
+async function buildYouTubeEmbed(videoUrl, accessJwt, includeThumbnail = true) {
   const meta = await fetchYouTubeOEmbed(videoUrl);
 
   let thumbBlob = null;
-  if (meta?.thumbnail_url) {
+  if (includeThumbnail && meta?.thumbnail_url) {
     thumbBlob = await uploadThumbnail(meta.thumbnail_url, accessJwt);
   }
 
@@ -257,10 +257,10 @@ async function createPost(text, images = [], parent = null, root = null) {
   } else {
     const yt = extractYouTubeUrl(text);
     if (yt) {
-      embedPromise = chrome.storage.local.get("includeYouTubeCard").then(
-        ({ includeYouTubeCard }) =>
+      embedPromise = chrome.storage.local.get(["includeYouTubeCard", "youtubeCardThumbnail"]).then(
+        ({ includeYouTubeCard, youtubeCardThumbnail }) =>
           includeYouTubeCard !== false
-            ? buildYouTubeEmbed(yt.url, sess.accessJwt)
+            ? buildYouTubeEmbed(yt.url, sess.accessJwt, youtubeCardThumbnail !== false)
             : null
       ).catch(() => null);
     }
