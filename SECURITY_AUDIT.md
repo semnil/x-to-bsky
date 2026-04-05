@@ -1,216 +1,300 @@
-# Security Audit Report — X to Bluesky Crossposter
+# セキュリティ監査レポート — X to Bluesky Crossposter
 
-**Date**: 2026-04-05 (updated)
-**Scope**: All source files (manifest.json, background.js, lib.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
-**Methodology**: OWASP Top 10 for Browser Extensions, Chrome MV3 security model review, AT Protocol credential handling analysis
-
----
-
-## Executive Summary
-
-This Chrome extension cross-posts from X (Twitter) to Bluesky. It stores Bluesky App Password credentials locally and communicates with `bsky.social` API endpoints. The extension follows the principle of least privilege with minimal permissions. No critical vulnerabilities were found. Several medium and low severity findings are documented below.
-
-**Overall Risk Rating: LOW**
+**日付**: 2026-04-05 (更新)
+**対象**: 全ソースファイル (manifest.json, background.js, lib.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
+**手法**: OWASP Top 10 for Browser Extensions、Chrome MV3 セキュリティモデルレビュー、AT Protocol 認証情報取り扱い分析
 
 ---
 
-## 1. Credential Storage
+## 概要
 
-### 1.1 App Password stored in chrome.storage.local (MEDIUM)
+この Chrome 拡張は X (Twitter) から Bluesky へのクロスポストを行う。Bluesky App Password をローカルに保存し、`bsky.social` API エンドポイントおよび YouTube oEmbed API と通信する。最小権限の原則に従い、必要最小限の権限のみを使用している。重大な脆弱性は発見されなかった。以下に中〜低リスクの所見を記載する。
 
-- **Location**: `options.js:162`, `background.js:105`
-- **Detail**: Bluesky App Password is stored in `chrome.storage.local` as plaintext. `chrome.storage.local` is not encrypted at rest — it is stored in a LevelDB database in the user's Chrome profile directory.
-- **Impact**: If an attacker gains filesystem access to the Chrome profile, they can read the App Password.
-- **Mitigating Factors**:
-  - App Passwords have limited scope (no account deletion, no password change)
-  - App Passwords can be revoked independently from the Bluesky settings
-  - `chrome.storage.local` is only accessible by this extension (enforced by Chrome)
-  - No `chrome.storage.sync` is used (credentials are NOT synced to Google cloud)
-- **Recommendation**: Document this limitation in the security note. Consider using `chrome.storage.session` for the session tokens (cleared on browser close), while keeping the App Password in `chrome.storage.local`.
-
-### 1.2 Session tokens in memory only (GOOD)
-
-- **Location**: `background.js:9` (`let session = null`)
-- **Detail**: `accessJwt` and `refreshJwt` are stored in JavaScript memory only, not in `chrome.storage`. They are lost when the service worker terminates.
-- **Assessment**: This is correct practice. Service worker restarts trigger a fresh login.
+**総合リスク評価: LOW**
 
 ---
 
-## 2. Permissions Analysis
+## 1. 認証情報の保存
 
-### 2.1 Manifest permissions (GOOD)
+### 1.1 App Password が chrome.storage.local に平文保存 (MEDIUM)
+
+- **場所**: `options.js:177`, `background.js:34`
+- **詳細**: Bluesky App Password が `chrome.storage.local` に平文で保存される。`chrome.storage.local` は保存時に暗号化されず、Chrome プロファイルディレクトリ内の LevelDB データベースにそのまま格納される。
+- **影響**: 攻撃者が Chrome プロファイルへのファイルシステムアクセスを取得した場合、App Password を読み取ることができる。
+- **緩和要素**:
+  - App Password はスコープが限定されている（アカウント削除やパスワード変更は不可）
+  - App Password は Bluesky の設定から個別に無効化可能
+  - `chrome.storage.local` はこの拡張のみがアクセス可能（Chrome が強制）
+  - `chrome.storage.sync` は使用していない（認証情報は Google クラウドに同期されない）
+- **推奨**: セキュリティ注記に本制限を記載済み。セッショントークンをストレージにキャッシュする場合は `chrome.storage.session`（ブラウザ終了時に消去）の使用を検討。
+
+### 1.2 セッショントークンはメモリ内のみ (GOOD)
+
+- **場所**: `background.js:15` (`let session = null`)
+- **詳細**: `accessJwt` と `refreshJwt` は JavaScript メモリにのみ保存され、`chrome.storage` には保存されない。Service worker の終了時に破棄される。
+- **評価**: 正しい実装。Service worker の再起動時にはフレッシュログインが行われる。
+
+---
+
+## 2. 権限分析
+
+### 2.1 Manifest 権限 (GOOD)
 
 ```json
 "permissions": ["storage"],
-"host_permissions": ["https://bsky.social/*", "https://*.bsky.network/*"]
+"host_permissions": [
+  "https://bsky.social/*",
+  "https://*.bsky.network/*",
+  "https://www.youtube.com/*",
+  "https://youtu.be/*",
+  "https://i.ytimg.com/*"
+]
 ```
 
-- **Assessment**: Minimal permissions. Only `storage` API permission. Host permissions limited to Bluesky domains.
-- No `tabs`, `webRequest`, `cookies`, `history`, or other sensitive permissions.
-- No `<all_urls>` or broad host patterns.
+- **評価**: 最小権限。API 権限は `storage` のみ。Host permissions は Bluesky ドメインと YouTube 関連ドメインに限定。
+- `tabs`、`webRequest`、`cookies`、`history` 等の機密権限なし。
+- `<all_urls>` や広範なホストパターンなし。
+- YouTube ドメインは oEmbed メタデータ取得 (`www.youtube.com`)、短縮 URL 解決 (`youtu.be`)、サムネイル画像取得 (`i.ytimg.com`) にのみ使用。
 
-### 2.2 Content script scope (GOOD)
+### 2.2 Content script のスコープ (GOOD)
 
 ```json
 "matches": ["https://x.com/*", "https://twitter.com/*"]
 ```
 
-- Content scripts only injected on X/Twitter pages.
-- No unnecessary page access.
+- Content script は X/Twitter ページにのみ注入される。
+- 不要なページアクセスなし。
 
 ---
 
-## 3. Cross-Site Scripting (XSS) Analysis
+## 3. クロスサイトスクリプティング (XSS) 分析
 
-### 3.1 options.js: innerHTML with i18n-html (LOW)
+### 3.1 options.js: innerHTML と i18n-html (LOW)
 
-- **Location**: `options.js:99-104`, `options.html` elements with `data-i18n-html`
-- **Detail**: `applyLanguage()` sets `el.innerHTML = t(key)` for elements with `data-i18n-html`. The i18n values contain HTML (`<strong>` tags).
-- **Assessment**: Safe — i18n strings are hardcoded in source, not user-supplied. However, if i18n values were ever externalized or loaded from storage, this would become an XSS vector.
-- **Recommendation**: Add a comment documenting that i18n-html values must only contain developer-controlled strings.
+- **場所**: `options.js:109-114`、`options.html` の `data-i18n-html` 属性を持つ要素
+- **詳細**: `applyLanguage()` が `data-i18n-html` 要素に対して `el.innerHTML = t(key)` を設定する。i18n 値には HTML (`<strong>` タグ) が含まれる。
+- **評価**: 安全 — i18n 文字列はソースコードにハードコードされており、ユーザー入力ではない。ただし i18n 値が外部化またはストレージから読み込まれるようになった場合、XSS ベクターとなる。
+- **推奨**: i18n-html 値は開発者管理の文字列のみを含む旨のコメントを追加。
 
-### 3.2 options.js: renderHistory uses escapeHtml correctly (GOOD)
+### 3.2 options.js: renderHistory は escapeHtml を正しく使用 (GOOD)
 
-- **Location**: `options.js:257-260`
-- **Detail**: User-supplied text (post text, error messages) is passed through `escapeHtml()` before insertion into innerHTML.
-- **Assessment**: Safe.
+- **場所**: `options.js:282-285`
+- **詳細**: ユーザー由来のテキスト（投稿テキスト、エラーメッセージ）は innerHTML への挿入前に `escapeHtml()` を経由している。
+- **評価**: 安全。
 
-### 3.3 content.js: toast uses textContent (GOOD)
+### 3.3 content.js: トーストは textContent を使用 (GOOD)
 
-- **Location**: `content.js:44`
-- **Detail**: `toast.textContent = message` — not innerHTML. Safe from XSS.
-
----
-
-## 4. Message Passing Security
-
-### 4.1 No sender validation in background.js (LOW)
-
-- **Location**: `background.js:407`
-- **Detail**: The `onMessage` handler does not verify `_sender` (sender tab/extension ID). Any content script on any matched page can send messages.
-- **Assessment**: Low risk because:
-  - Only this extension's content scripts can send messages to this extension's background
-  - The `matches` pattern is limited to x.com/twitter.com
-  - Messages only trigger Bluesky API actions with stored credentials
-- **Recommendation**: For defense in depth, validate `sender.id === chrome.runtime.id`.
-
-### 4.2 Thread data from content script is trusted (LOW)
-
-- **Location**: `background.js:410`
-- **Detail**: `msg.thread` from content script is used directly. If the content script is somehow compromised (e.g. via DOM-based XSS on x.com), arbitrary text/images could be posted to Bluesky.
-- **Assessment**: The attack surface is the x.com page itself. If x.com has an XSS vulnerability, the attacker has broader access than just this extension.
+- **場所**: `content.js:63`
+- **詳細**: `toast.textContent = message` — innerHTML ではなく textContent を使用。XSS の影響なし。
 
 ---
 
-## 5. Network Security
+## 4. メッセージパッシングのセキュリティ
 
-### 5.1 All API calls use HTTPS (GOOD)
+### 4.1 background.js で送信元検証なし (LOW)
 
-- **Location**: `background.js:3` (`const BSKY_SERVICE = "https://bsky.social"`)
-- All fetch calls go to `https://bsky.social` — no HTTP fallback.
+- **場所**: `background.js:362`
+- **詳細**: `onMessage` ハンドラが `_sender`（送信元タブ/拡張 ID）を検証していない。マッチしたページ上の任意のコンテンツスクリプトがメッセージを送信可能。
+- **評価**: 低リスク:
+  - この拡張のコンテンツスクリプトのみがこの拡張のバックグラウンドにメッセージを送信可能
+  - `matches` パターンは x.com/twitter.com に限定
+  - メッセージは保存済み認証情報を使用した Bluesky API アクションのみをトリガー
+- **推奨**: 多層防御として `sender.id === chrome.runtime.id` の検証を追加。
 
-### 5.2 Credentials sent only to bsky.social (GOOD)
+### 4.2 コンテンツスクリプトからのスレッドデータを信頼 (LOW)
 
-- App Password is only sent in the `createSession` request body to `bsky.social`.
-- Access tokens are only sent as `Authorization: Bearer` headers to `bsky.social`.
-- No credentials are sent to any other domain.
-
-### 5.3 No user-controlled URL construction (GOOD)
-
-- API endpoints are hardcoded with the `BSKY_SERVICE` constant.
-- `resolveHandle` uses `encodeURIComponent()` for the handle parameter — no injection risk.
+- **場所**: `background.js:365`
+- **詳細**: コンテンツスクリプトからの `msg.thread` がそのまま使用される。コンテンツスクリプトが何らかの方法で侵害された場合（例: x.com 上の DOM ベース XSS）、任意のテキスト/画像が Bluesky に投稿される可能性がある。
+- **評価**: 攻撃面は x.com ページ自体。x.com に XSS 脆弱性がある場合、攻撃者はこの拡張よりも広範なアクセスを持つ。
 
 ---
 
-## 6. Data Exposure
+## 5. ネットワークセキュリティ
 
-### 6.1 Post history stored in cleartext (LOW)
+### 5.1 全 API 通信が HTTPS (GOOD)
 
-- **Location**: `background.js:395-403`
-- **Detail**: Post text previews (first 200 chars) and URIs are stored in `chrome.storage.local.postHistory`.
-- **Assessment**: Low risk. This is user-initiated data stored locally. No sensitive credentials in history.
+- **場所**: `background.js:10` (`const BSKY_SERVICE = "https://bsky.social"`)
+- 全ての fetch 呼び出しは `https://bsky.social` または `https://www.youtube.com` (oEmbed) — HTTP フォールバックなし。
 
-### 6.2 Base64 image data in memory during posting (INFORMATIONAL)
+### 5.2 認証情報の送信先が限定 (GOOD)
 
-- **Location**: `content.js:176` (sendMessage with thread containing images)
-- **Detail**: Full image data (base64) passes through Chrome's message channel between content script and service worker. This is in-memory only, not persisted.
-- **Assessment**: Acceptable. Images are from the user's own compose area.
+- App Password は `bsky.social` への `createSession` リクエストボディにのみ送信される。
+- アクセストークンは `bsky.social` への `Authorization: Bearer` ヘッダーにのみ送信される。
+- YouTube を含む他のドメインに認証情報は一切送信されない。
+
+### 5.3 ユーザー制御の URL 構築なし (GOOD)
+
+- API エンドポイントは `BSKY_SERVICE` 定数でハードコードされている。
+- `resolveHandle` はハンドルパラメータに `encodeURIComponent()` を使用 — インジェクションリスクなし。
+- YouTube oEmbed URL は `encodeURIComponent()` でエスケープ済み。
+
+---
+
+## 6. データ露出
+
+### 6.1 投稿履歴が平文保存 (LOW)
+
+- **場所**: `background.js:350-358`
+- **詳細**: 投稿テキストのプレビュー（先頭 200 文字）と URI が `chrome.storage.local.postHistory` に保存される。
+- **評価**: 低リスク。ユーザー操作起点のデータがローカルに保存される。履歴に機密認証情報は含まれない。
+
+### 6.2 投稿時のメモリ内 Base64 画像データ (INFORMATIONAL)
+
+- **場所**: `content.js:252` (画像データを含むスレッドの sendMessage)
+- **詳細**: 画像データ全体 (base64) がコンテンツスクリプトと Service worker 間の Chrome メッセージチャネルを通過する。メモリ内のみで永続化されない。
+- **評価**: 許容範囲。画像はユーザー自身のコンポーズエリアから取得される。
 
 ---
 
 ## 7. Content Security Policy
 
-### 7.1 No explicit CSP in manifest (INFORMATIONAL)
+### 7.1 manifest に明示的 CSP なし (INFORMATIONAL)
 
-- **Detail**: No `content_security_policy` key in manifest.json. MV3 enforces a default CSP that blocks inline scripts and `eval()`.
-- **Assessment**: Default MV3 CSP is sufficient. No inline scripts are used.
-
----
-
-## 8. Supply Chain / Dependencies
-
-### 8.1 Zero external dependencies (GOOD)
-
-- No npm packages, no CDN scripts, no externally loaded resources.
-- All code is first-party.
-- **Assessment**: No supply chain attack surface.
+- **詳細**: manifest.json に `content_security_policy` キーがない。MV3 はインラインスクリプトと `eval()` をブロックするデフォルト CSP を強制する。
+- **評価**: MV3 のデフォルト CSP で十分。インラインスクリプトは使用していない。
 
 ---
 
-## Summary of Findings
+## 8. サプライチェーン / 依存関係
 
-| # | Finding | Severity | Status |
-|---|---------|----------|--------|
-| 1.1 | App Password in chrome.storage.local (plaintext at rest) | MEDIUM | Accepted risk — documented in UI |
-| 3.1 | innerHTML with i18n-html values | LOW | Safe (developer-controlled strings) |
-| 4.1 | No sender validation in message handler | LOW | Acceptable (MV3 enforces isolation) |
-| 4.2 | Content script data trusted by background | LOW | Acceptable (x.com trust boundary) |
-| 6.1 | Post history in cleartext | LOW | Acceptable (user's own data) |
+### 8.1 外部依存ゼロ (GOOD)
 
-**No CRITICAL or HIGH severity findings.**
+- npm パッケージ、CDN スクリプト、外部リソースの読み込みなし。
+- 全コードがファーストパーティ。
+- **評価**: サプライチェーン攻撃面なし。
 
 ---
 
-## 9. Changes Since Initial Audit
+## 所見一覧 (初期監査)
 
-### 9.1 ES module refactoring (GOOD)
+| # | 所見 | 重要度 | 状態 |
+|---|------|--------|------|
+| 1.1 | App Password が chrome.storage.local に平文保存 | MEDIUM | 許容リスク — UI に記載済み |
+| 3.1 | innerHTML と i18n-html 値 | LOW | 安全（開発者管理の文字列） |
+| 4.1 | メッセージハンドラで送信元検証なし | LOW | 許容（MV3 が分離を強制） |
+| 4.2 | コンテンツスクリプトのデータを信頼 | LOW | 許容（x.com 信頼境界） |
+| 6.1 | 投稿履歴が平文保存 | LOW | 許容（ユーザー自身のデータ） |
 
-- **Detail**: Pure functions extracted from `background.js` to `lib.js`. Background service worker now uses `"type": "module"` in manifest.
-- **Assessment**: No security impact. ES modules have stricter scope isolation than classic scripts.
-
-### 9.2 Quote RT URL feature — DOM extraction (LOW)
-
-- **Location**: `content.js:extractQuoteUrl()`
-- **Detail**: New feature extracts quoted tweet URLs from the compose area DOM. Uses `findComposeContainer()` which walks up 10 parent levels. The fallback search matches any `a[href*="/status/"]` in the container.
-- **Assessment**: Low risk — feature is disabled by default. The extracted URL is user-visible content (X post links) appended as plain text, processed by `parseFacets` as a link facet. No script injection vector since the URL is validated against a strict regex (`STATUS_URL_RE`).
-- **Recommendation**: None required. Default-off mitigates accidental data exposure.
-
-### 9.3 storage.onChanged listener (INFORMATIONAL)
-
-- **Location**: `content.js:27-31`
-- **Detail**: Listens to `chrome.storage.onChanged` for `includeQuoteUrl` setting changes. Only reads boolean values from extension-controlled storage.
-- **Assessment**: No security concern. `chrome.storage.onChanged` is extension-scoped.
+**CRITICAL または HIGH の所見なし。**
 
 ---
 
-## Summary of Findings
+## 9. 初期監査以降の変更
 
-| # | Finding | Severity | Status |
-|---|---------|----------|--------|
-| 1.1 | App Password in chrome.storage.local (plaintext at rest) | MEDIUM | Accepted risk — documented in UI |
-| 3.1 | innerHTML with i18n-html values | LOW | Safe (developer-controlled strings) |
-| 4.1 | No sender validation in message handler | LOW | Acceptable (MV3 enforces isolation) |
-| 4.2 | Content script data trusted by background | LOW | Acceptable (x.com trust boundary) |
-| 6.1 | Post history in cleartext | LOW | Acceptable (user's own data) |
-| 9.2 | Quote URL DOM extraction | LOW | Default-off, validated by regex |
+### 9.1 ES モジュールリファクタリング (GOOD)
 
-**No CRITICAL or HIGH severity findings.**
+- **詳細**: 純粋関数を `background.js` から `lib.js` に抽出。バックグラウンド Service worker は manifest で `"type": "module"` を使用。
+- **評価**: セキュリティへの影響なし。ES モジュールはクラシックスクリプトよりも厳密なスコープ分離を持つ。
+
+### 9.2 引用 RT URL 機能 — DOM 抽出 (LOW)
+
+- **場所**: `content.js:extractQuoteUrl()`
+- **詳細**: コンポーズエリアの DOM から引用ツイートの URL を抽出する新機能。`findComposeContainer()` で親要素を 10 レベル遡行する。フォールバック検索はコンテナ内の `a[href*="/status/"]` にマッチする。
+- **評価**: 低リスク — 機能はデフォルトで無効。抽出された URL はユーザーに可視のコンテンツ（X ポストリンク）であり、平文テキストとして追加され、`parseFacets` でリンクファセットとして処理される。URL は厳密な正規表現 (`STATUS_URL_RE`) で検証されるため、スクリプトインジェクションのベクターはない。
+- **推奨**: 修正不要。デフォルト無効により意図しないデータ露出を緩和。
+
+### 9.3 storage.onChanged リスナー (INFORMATIONAL)
+
+- **場所**: `content.js:27-31`
+- **詳細**: `chrome.storage.onChanged` で `includeQuoteUrl` 設定の変更を監視。拡張管理のストレージから真偽値のみを読み取る。
+- **評価**: セキュリティ上の懸念なし。`chrome.storage.onChanged` は拡張スコープ。
+
+### 9.4 YouTube リンクカード機能 — 外部通信の追加 (LOW)
+
+- **場所**: `background.js:fetchYouTubeOEmbed()`, `background.js:uploadThumbnail()`
+- **詳細**: YouTube URL を含むポスト投稿時に 2 つの外部通信が追加された:
+  1. YouTube oEmbed API (`https://www.youtube.com/oembed?url=...&format=json`) へのメタデータ取得
+  2. YouTube サムネイル画像 (`https://i.ytimg.com/vi/...`) のダウンロード
+- **評価**:
+  - 認証情報は YouTube 側に一切送信されない（oEmbed は API キー不要の公開エンドポイント）
+  - `host_permissions` に `www.youtube.com/*`, `youtu.be/*`, `i.ytimg.com/*` を追加済み — 必要最小限のドメイン
+  - oEmbed レスポンスの `title`, `author_name`, `thumbnail_url` フィールドのみ使用。HTML コンテンツ (`html` フィールド) は無視される
+  - サムネイル画像は `uploadBlob` 経由で Bluesky に送信されるのみ — ローカルに永続化されない
+  - ユーザーが投稿したテキストに含まれる YouTube URL のみがトリガーとなる（拡張が自律的に外部通信を行うことはない）
+- **リスク**: ユーザーが投稿する YouTube URL が YouTube サーバーに送信される。これはユーザーが意図した投稿内容であり、ブラウザの通常の URL アクセスと同等の情報露出
+- **緩和策**: デフォルト有効だが設定画面から無効化可能
+
+### 9.5 host_permissions の拡大 (INFORMATIONAL)
+
+- **場所**: `manifest.json:7-13`
+- **詳細**: `host_permissions` が 2 ドメインから 5 ドメインに拡大:
+  - 追加: `https://www.youtube.com/*`, `https://youtu.be/*`, `https://i.ytimg.com/*`
+- **評価**: 追加ドメインは全て YouTube/Google の公開インフラ。`fetch` のみに使用され、Cookie やページコンテンツへのアクセスはない。Chrome Web Store の審査で host_permissions の正当性説明が必要になる可能性あり
+
+### 9.6 uploadBlob 共通化 (GOOD)
+
+- **場所**: `background.js:uploadBlob()`
+- **詳細**: `uploadImage` と `uploadThumbnail` の共通ロジックを `uploadBlob(bytes, contentType, accessJwt)` に抽出。blob アップロードのエンドポイントと認証ヘッダーが単一箇所に集約された
+- **評価**: セキュリティ改善。認証トークンの取り扱いが 1 箇所に集約され、レビューと保守が容易になった
 
 ---
 
-## Recommendations (Priority Order)
+## 所見一覧 (全体)
 
-1. **Consider `chrome.storage.session`** for session tokens if the extension ever caches them in storage
-2. **Add `sender.id` check** in `onMessage` handler for defense in depth
-3. **Document** the security model in README for transparency with users
-4. **Monitor** Bluesky AT Protocol changes for any new authentication requirements (e.g. DPoP/OAuth migration)
+| # | 所見 | 重要度 | 状態 |
+|---|------|--------|------|
+| 1.1 | App Password が chrome.storage.local に平文保存 | MEDIUM | 許容リスク — UI に記載済み |
+| 3.1 | innerHTML と i18n-html 値 | LOW | 安全（開発者管理の文字列） |
+| 4.1 | メッセージハンドラで送信元検証なし | LOW | 許容（MV3 が分離を強制） |
+| 4.2 | コンテンツスクリプトのデータを信頼 | LOW | 許容（x.com 信頼境界） |
+| 6.1 | 投稿履歴が平文保存 | LOW | 許容（ユーザー自身のデータ） |
+| 9.2 | 引用 RT URL の DOM 抽出 | LOW | デフォルト無効、正規表現で検証 |
+| 9.4 | YouTube oEmbed / サムネイル外部通信 | LOW | 認証情報送信なし、ユーザー操作起点 |
+| 9.5 | host_permissions の拡大 (3 ドメイン追加) | INFORMATIONAL | YouTube 公開インフラのみ |
+
+**CRITICAL または HIGH の所見なし。**
+
+---
+
+## 推奨事項 (優先順)
+
+1. **`chrome.storage.session` の検討** — セッショントークンをストレージにキャッシュする場合に使用（ブラウザ終了時に消去）
+2. **`sender.id` 検証の追加** — `onMessage` ハンドラで多層防御として送信元を検証
+3. **セキュリティモデルの文書化** — README にセキュリティモデルを記載し、ユーザーへの透明性を確保
+4. **AT Protocol の変更を監視** — Bluesky の新しい認証要件（DPoP/OAuth 移行等）への対応
+5. **Chrome Web Store 審査対策** — host_permissions に YouTube ドメインを追加した理由の説明を準備
+
+---
+
+## 10. 利用規約リスク分析
+
+### 10.1 X (Twitter) — スクレイピング・自動化条項 (MEDIUM)
+
+- **関連条項**: X 利用規約 — サービスへの自動的手段によるアクセスの禁止、コンテンツ再配布制限
+- **詳細**:
+  - X の ToS はスクレイピングを広く禁止しており、DOM 読み取りと API アクセスを区別していない
+  - 「自動化された手段」によるサービスアクセスの禁止が、capture phase のクリックフックに適用される可能性
+  - 「X Content」の再配布制限が、ユーザー自身のコンテンツの他プラットフォームへの投稿に適用される可能性
+- **評価**: ユーザー自身が作成したコンテンツを自身の操作で投稿する形態であり、完全自律型スクレイパーとは性質が異なる。同種の拡張（Skybridge, Tweet Sync 等）が Chrome Web Store で公開・運用されている前例がある。個人ユーザー向けクロスポストツールに対して積極的な措置が取られる可能性は低いが、ToS 上のグレーゾーンは存在する。
+
+### 10.2 Bluesky — App Password 廃止予定 (LOW)
+
+- **関連条項**: Bluesky 開発者ガイドライン、OAuth 移行ブログ記事
+- **詳細**:
+  - クロスポストを禁止する条項は存在しない
+  - ユーザー操作起点の 1:1 投稿であり、スパムには該当しない
+  - App Password は現在も動作するが、Bluesky は OAuth への移行を推奨しており、将来的に App Password が制限される可能性がある
+  - Bot ラベル要件はユーザー自身のアカウントでの投稿には現時点で適用されない
+- **評価**: 最もリスクが低い。唯一の技術的懸念は App Password → OAuth 移行時期。
+
+### 10.3 YouTube — サムネイル再ホスティング (LOW-MEDIUM)
+
+- **関連条項**: YouTube 利用規約 Section 5(C) — ダウンロード制限
+- **詳細**:
+  - oEmbed エンドポイントは YouTube Data API の一部ではなく、API キー不要の公開エンドポイント。メタデータ取得自体のリスクは極低
+  - サムネイル画像のダウンロードと Bluesky への再アップロードは「再ホスティング」に該当する可能性がある（ToS Section 5(C) はダウンロードボタンが提供されないコンテンツのダウンロードを禁止）
+  - ただし、Twitter/Slack/Discord 等のリンクプレビュー生成も同様の処理を行っており、業界慣行として広く容認されている
+- **評価**: サムネイル再アップロードは ToS の文言上は議論の余地があるが、リンクプレビューとしての利用は業界標準的な慣行。
+
+### 10.4 総合リスク評価
+
+| プラットフォーム | リスク | 主な懸念 |
+|-----------------|--------|---------|
+| X (Twitter) | MEDIUM | スクレイピング禁止の広範な解釈 |
+| Bluesky | LOW | App Password 廃止予定 |
+| YouTube | LOW-MEDIUM | サムネイル再ホスティング |
+
+**推奨対応**:
+1. Bluesky OAuth 移行 — App Password 廃止に備えて中期的に対応計画を持つ
+2. YouTube サムネイル — 将来的にサムネイルなしのリンクカード（タイトルのみ）をオプション提供する案を検討
+3. README に免責事項 — 各プラットフォームの ToS に基づくリスクをユーザーに開示
