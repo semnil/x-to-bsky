@@ -16,6 +16,7 @@ rm -f "$OUT"
 zip -r "$OUT" \
   manifest.json \
   background.js \
+  lib.js \
   shared.js \
   content.js \
   content.css \
