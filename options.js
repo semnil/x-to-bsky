@@ -42,14 +42,6 @@ const i18n = {
     includeYouTubeCardHint: "YouTube リンクを含むポストにサムネイル付きカードを自動添付します",
     youtubeCardThumbnailLabel: "サムネイル画像を含める",
     youtubeCardThumbnailHint: "無効にするとタイトルのみのリンクカードになります",
-    // History
-    historyTitle: "投稿履歴",
-    clearHistoryBtn: "クリア",
-    historyEmpty: "投稿履歴はまだありません。",
-    historyThread: "スレッド",
-    historyImages: "画像",
-    historyPosts: "件",
-    historyError: "エラー",
   },
   en: {
     title: "🦋 X to Bluesky — Settings",
@@ -90,14 +82,6 @@ const i18n = {
     includeYouTubeCardHint: "Automatically attaches a thumbnail card when your post contains a YouTube link",
     youtubeCardThumbnailLabel: "Include thumbnail image",
     youtubeCardThumbnailHint: "When disabled, creates a title-only link card",
-    // History
-    historyTitle: "Post History",
-    clearHistoryBtn: "Clear",
-    historyEmpty: "No post history yet.",
-    historyThread: "thread",
-    historyImages: "images",
-    historyPosts: "posts",
-    historyError: "Error",
   },
 };
 
@@ -142,8 +126,6 @@ const includeQuoteUrlToggle = document.getElementById("includeQuoteUrl");
 const includeYouTubeCardToggle = document.getElementById("includeYouTubeCard");
 const youtubeCardThumbnailToggle = document.getElementById("youtubeCardThumbnail");
 
-const clearHistoryBtn = document.getElementById("clearHistory");
-const historyListEl = document.getElementById("history-list");
 
 // ─── Load Settings ───────────────────────────────────────
 
@@ -168,7 +150,6 @@ chrome.storage.local.get(
     youtubeCardThumbnailToggle.disabled = !includeYouTubeCardToggle.checked;
 
     applyLanguage();
-    loadHistory();
   }
 );
 
@@ -258,68 +239,3 @@ youtubeCardThumbnailToggle.addEventListener("change", () => {
   chrome.storage.local.set({ youtubeCardThumbnail: youtubeCardThumbnailToggle.checked });
 });
 
-// ─── Post History ────────────────────────────────────────
-
-function loadHistory() {
-  chrome.runtime.sendMessage({ type: "GET_HISTORY" }, (res) => {
-    if (chrome.runtime.lastError || !res) return;
-    renderHistory(res.history || []);
-  });
-}
-
-function renderHistory(history) {
-  if (history.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "history-empty";
-    empty.textContent = t("historyEmpty");
-    historyListEl.innerHTML = "";
-    historyListEl.appendChild(empty);
-    return;
-  }
-
-  historyListEl.innerHTML = "";
-  for (const entry of history) {
-    const item = document.createElement("div");
-    item.className = `history-item ${entry.success ? "history-item--success" : "history-item--error"}`;
-
-    const date = new Date(entry.timestamp);
-    const timeStr = date.toLocaleString(currentLang === "ja" ? "ja-JP" : "en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    let badges = "";
-    if (entry.postCount > 1) {
-      badges += `<span class="history-badge history-badge--thread">${t("historyThread")} ${entry.postCount}${t("historyPosts")}</span>`;
-    }
-    if (entry.imageCount > 0) {
-      badges += `<span class="history-badge history-badge--images">${t("historyImages")} ${entry.imageCount}</span>`;
-    }
-
-    const statusIcon = entry.success ? "✓" : "✗";
-    const textPreview = entry.text
-      ? entry.text.slice(0, 80) + (entry.text.length > 80 ? "…" : "")
-      : "";
-
-    item.innerHTML =
-      `<div class="history-meta"><span>${statusIcon} ${timeStr}</span>${badges}</div>` +
-      (textPreview ? `<div class="history-text">${escapeHtml(textPreview)}</div>` : "") +
-      (entry.error ? `<div class="history-error">${t("historyError")}: ${escapeHtml(entry.error)}</div>` : "");
-
-    historyListEl.appendChild(item);
-  }
-}
-
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-clearHistoryBtn.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "CLEAR_HISTORY" }, () => {
-    renderHistory([]);
-  });
-});

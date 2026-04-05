@@ -90,16 +90,6 @@
     .btn-secondary:hover {
       background: #16181c;
     }
-    .btn-danger {
-      background: transparent;
-      color: #f4212e;
-      border: 1px solid #333639;
-      padding: 6px 14px;
-      font-size: 13px;
-    }
-    .btn-danger:hover {
-      background: #f4212e22;
-    }
     .message {
       margin-top: 16px;
       padding: 10px 12px;
@@ -206,70 +196,6 @@
       margin-top: 12px;
     }
 
-    /* ─── History Section ─── */
-    .history-section {
-      margin-top: 32px;
-    }
-    .history-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-    .history-empty {
-      font-size: 13px;
-      color: #71767b;
-      padding: 16px 0;
-    }
-    .history-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .history-item {
-      padding: 10px 12px;
-      background: #16181c;
-      border-radius: 8px;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    .history-item--error {
-      border-left: 3px solid #f4212e;
-    }
-    .history-item--success {
-      border-left: 3px solid #0085ff;
-    }
-    .history-meta {
-      display: flex;
-      gap: 8px;
-      font-size: 11px;
-      color: #71767b;
-      margin-bottom: 4px;
-    }
-    .history-text {
-      color: #e7e9ea;
-      word-break: break-word;
-    }
-    .history-error {
-      color: #f4212e;
-      font-size: 12px;
-      margin-top: 2px;
-    }
-    .history-badge {
-      display: inline-block;
-      font-size: 11px;
-      padding: 1px 6px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-    .history-badge--thread {
-      background: #0085ff33;
-      color: #0085ff;
-    }
-    .history-badge--images {
-      background: #7856ff33;
-      color: #7856ff;
-    }
   </style>
 </head>
 <body>
@@ -385,16 +311,6 @@
       </div>
     </details>
 
-    <!-- ─── Post History ─── -->
-    <hr class="section-divider">
-
-    <div class="history-section">
-      <div class="history-header">
-        <h2 data-i18n="historyTitle">投稿履歴</h2>
-        <button class="btn-danger" id="clearHistory" data-i18n="clearHistoryBtn">クリア</button>
-      </div>
-      <div id="history-list"></div>
-    </div>
   </div>
 
   <script src="shared.js"></script>

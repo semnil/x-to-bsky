@@ -9,7 +9,6 @@ import {
 
 const BSKY_SERVICE = "https://bsky.social";
 const MAX_IMAGES = 4;
-const MAX_HISTORY = 100;
 
 // Session cache (lives as long as the service worker)
 let session = null;
@@ -342,21 +341,6 @@ async function postThread(thread) {
   return results;
 }
 
-// ─── Post History ────────────────────────────────────────
-
-/**
- * Append an entry to the post history log in chrome.storage.local.
- */
-async function addToHistory(entry) {
-  const { postHistory = [] } = await chrome.storage.local.get("postHistory");
-  postHistory.unshift({
-    timestamp: new Date().toISOString(),
-    ...entry,
-  });
-  if (postHistory.length > MAX_HISTORY) postHistory.length = MAX_HISTORY;
-  await chrome.storage.local.set({ postHistory });
-}
-
 // ─── Message Handler ─────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -366,23 +350,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
     postThread(thread)
       .then((results) => {
-        const summary = thread.map((p) => p.text).join("\n---\n").slice(0, 200);
-        addToHistory({
-          text: summary,
-          success: true,
-          postCount: results.length,
-          imageCount: thread.reduce((n, p) => n + (p.images?.length || 0), 0),
-          uri: results[0]?.uri,
-        }).catch(() => {}); // V02: history write is non-critical
         sendResponse({ ok: true, uri: results[0]?.uri, postCount: results.length });
       })
       .catch((err) => {
-        const summary = thread.map((p) => p.text).join("\n---\n").slice(0, 200);
-        addToHistory({
-          text: summary,
-          success: false,
-          error: err.message,
-        }).catch(() => {}); // V02: history write is non-critical
         sendResponse({ ok: false, error: err.message });
       });
     return true;
@@ -404,20 +374,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         enabled: data.crosspostEnabled !== false,
         handle: data.bskyHandle || "",
       });
-    });
-    return true;
-  }
-
-  if (msg.type === "GET_HISTORY") {
-    chrome.storage.local.get("postHistory", (data) => {
-      sendResponse({ history: data.postHistory || [] });
-    });
-    return true;
-  }
-
-  if (msg.type === "CLEAR_HISTORY") {
-    chrome.storage.local.set({ postHistory: [] }, () => {
-      sendResponse({ ok: true });
     });
     return true;
   }
