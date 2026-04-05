@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "X to Bluesky Crossposter",
   "version": "1.0.0",
-  "description": "X (Twitter) の投稿を Bluesky に同時投稿する",
+  "description": "Cross-post your X (Twitter) posts to Bluesky automatically",
   "permissions": ["storage"],
   "host_permissions": [
     "https://bsky.social/*",

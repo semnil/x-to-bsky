@@ -16,18 +16,18 @@ X (Twitter) の投稿ボタンをフックし、同じテキスト・画像を B
 
 ## セットアップ
 
-### 1. Bluesky App Password を発行
+### 1. ���張をインストール
+
+[Chrome Web Store](https://chromewebstore.google.com/) からインストール
+
+> **開発版を使う場合**: `chrome://extensions` → デベロッパーモード ON → 「パッケージ化されていない拡張機能を読み込む」でこのリポジトリのフォルダを指定
+
+### 2. Bluesky App Password を発行
 
 1. [bsky.app](https://bsky.app) にログイン
 2. **設定** → **プライバシーとセキュリティ** → **アプリパスワード**
    (EN: Settings → Privacy and security → App passwords)
 3. 新しい App Password を作成してコピー
-
-### 2. 拡張をインストール
-
-1. `chrome://extensions` を開く
-2. 「デベロッパー モード」を ON
-3. 「パッケージ化されていない拡張機能を読み込む」でこのフォルダを指定
 
 ### 3. 認証情報を設定
 
