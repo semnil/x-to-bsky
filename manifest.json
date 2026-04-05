@@ -4,7 +4,13 @@
   "version": "1.0.0",
   "description": "X (Twitter) の投稿を Bluesky に同時投稿する",
   "permissions": ["storage"],
-  "host_permissions": ["https://bsky.social/*", "https://*.bsky.network/*"],
+  "host_permissions": [
+    "https://bsky.social/*",
+    "https://*.bsky.network/*",
+    "https://www.youtube.com/*",
+    "https://youtu.be/*",
+    "https://i.ytimg.com/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"

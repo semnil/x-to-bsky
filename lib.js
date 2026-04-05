@@ -147,6 +147,30 @@ function parseFacets(text) {
   return facets;
 }
 
+// ─── YouTube URL Detection ─────────────────────────────
+
+const YOUTUBE_VIDEO_RE = /https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})(?:[&?][^\s]*)?/;
+const YOUTUBE_URL_RE = /https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\/[^\s/][^\s]*/;
+
+/**
+ * Extract the first YouTube URL from text.
+ * Returns { url, videoId } or null.
+ * videoId is null for non-video YouTube URLs (playlists, channels, etc.)
+ */
+function extractYouTubeUrl(text) {
+  const videoMatch = text.match(YOUTUBE_VIDEO_RE);
+  if (videoMatch) return { url: stripTrailingPunct(videoMatch[0]), videoId: videoMatch[1] };
+
+  const urlMatch = text.match(YOUTUBE_URL_RE);
+  if (urlMatch) return { url: stripTrailingPunct(urlMatch[0]), videoId: null };
+
+  return null;
+}
+
+function stripTrailingPunct(url) {
+  return url.replace(/[.,;:!?)]+$/, "");
+}
+
 // ─── Exports ────────────────────────────────────────────
 
 export {
@@ -159,4 +183,5 @@ export {
   splitText,
   buildByteOffsetMap,
   parseFacets,
+  extractYouTubeUrl,
 };

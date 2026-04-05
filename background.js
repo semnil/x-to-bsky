@@ -4,6 +4,7 @@ import {
   splitText,
   parseFacets,
   FACET_MENTION,
+  extractYouTubeUrl,
 } from "./lib.js";
 
 const BSKY_SERVICE = "https://bsky.social";
@@ -122,28 +123,18 @@ async function resolveMentionFacets(facets) {
   return results.filter(Boolean);
 }
 
-// ─── Image Upload ────────────────────────────────────────
+// ─── Blob Upload ────────────────────────────────────────
 
 /**
- * Upload an image to Bluesky via uploadBlob.
- * @param {string} base64Data - data-URL or raw base64 string
- * @param {string} mimeType - e.g. "image/jpeg"
- * @param {string} accessJwt - session token (caller provides to avoid redundant createSession)
+ * Upload raw bytes to Bluesky via uploadBlob.
  */
-async function uploadImage(base64Data, mimeType, accessJwt) {
-  const raw = base64Data.replace(/^data:[^;]+;base64,/, "");
-  const binary = atob(raw);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
+async function uploadBlob(bytes, contentType, accessJwt) {
   const res = await fetch(
     `${BSKY_SERVICE}/xrpc/com.atproto.repo.uploadBlob`,
     {
       method: "POST",
       headers: {
-        "Content-Type": mimeType,
+        "Content-Type": contentType,
         Authorization: `Bearer ${accessJwt}`,
       },
       body: bytes,
@@ -152,10 +143,84 @@ async function uploadImage(base64Data, mimeType, accessJwt) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(`Image upload failed: ${err.message || res.status}`);
+    throw new Error(`Blob upload failed: ${err.message || res.status}`);
   }
 
   return await res.json();
+}
+
+/**
+ * Upload a base64-encoded image to Bluesky.
+ */
+async function uploadImage(base64Data, mimeType, accessJwt) {
+  const raw = base64Data.replace(/^data:[^;]+;base64,/, "");
+  const binary = atob(raw);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return uploadBlob(bytes, mimeType, accessJwt);
+}
+
+/**
+ * Download an image URL and upload it to Bluesky.
+ * Returns the blob reference or null on failure.
+ */
+async function uploadThumbnail(imageUrl, accessJwt) {
+  try {
+    const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) return null;
+    const buf = await imgRes.arrayBuffer();
+    const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+    const data = await uploadBlob(new Uint8Array(buf), contentType, accessJwt);
+    return data.blob;
+  } catch {
+    return null;
+  }
+}
+
+// ─── YouTube Link Card ──────────────────────────────────
+
+/**
+ * Fetch YouTube oEmbed metadata for a video URL.
+ * Returns { title, thumbnail_url } or null on failure.
+ */
+async function fetchYouTubeOEmbed(videoUrl) {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build an app.bsky.embed.external for a YouTube link.
+ * Tries oEmbed for metadata/thumbnail; falls back to a plain link card.
+ */
+async function buildYouTubeEmbed(videoUrl, accessJwt) {
+  const meta = await fetchYouTubeOEmbed(videoUrl);
+
+  let thumbBlob = null;
+  if (meta?.thumbnail_url) {
+    thumbBlob = await uploadThumbnail(meta.thumbnail_url, accessJwt);
+  }
+
+  const embed = {
+    $type: "app.bsky.embed.external",
+    external: {
+      uri: videoUrl,
+      title: meta?.title || "",
+      description: meta?.author_name ? `by ${meta.author_name}` : "",
+    },
+  };
+  if (thumbBlob) {
+    embed.external.thumb = thumbBlob;
+  }
+  return embed;
 }
 
 // ─── Post Creation ───────────────────────────────────────
@@ -170,10 +235,38 @@ async function uploadImage(base64Data, mimeType, accessJwt) {
 async function createPost(text, images = [], parent = null, root = null) {
   const sess = await createSession();
 
-  let facets = parseFacets(text);
-  if (facets.length > 0) {
-    facets = await resolveMentionFacets(facets);
+  // Start independent async work in parallel: facet resolution + embed construction
+  const rawFacets = parseFacets(text);
+  const facetsPromise = rawFacets.length > 0
+    ? resolveMentionFacets(rawFacets)
+    : Promise.resolve([]);
+
+  let embedPromise = Promise.resolve(null);
+  if (images.length > 0) {
+    embedPromise = Promise.all(
+      images.slice(0, MAX_IMAGES).map((img) =>
+        uploadImage(img.base64, img.mimeType, sess.accessJwt)
+      )
+    ).then((uploadResults) => ({
+      $type: "app.bsky.embed.images",
+      images: uploadResults.map((result, i) => ({
+        alt: images[i].alt || "",
+        image: result.blob,
+      })),
+    }));
+  } else {
+    const yt = extractYouTubeUrl(text);
+    if (yt) {
+      embedPromise = chrome.storage.local.get("includeYouTubeCard").then(
+        ({ includeYouTubeCard }) =>
+          includeYouTubeCard !== false
+            ? buildYouTubeEmbed(yt.url, sess.accessJwt)
+            : null
+      ).catch(() => null);
+    }
   }
+
+  const [facets, embed] = await Promise.all([facetsPromise, embedPromise]);
 
   const record = {
     $type: "app.bsky.feed.post",
@@ -182,22 +275,7 @@ async function createPost(text, images = [], parent = null, root = null) {
   };
 
   if (facets.length > 0) record.facets = facets;
-
-  // Upload images in parallel
-  if (images.length > 0) {
-    const uploadResults = await Promise.all(
-      images.slice(0, MAX_IMAGES).map((img) =>
-        uploadImage(img.base64, img.mimeType, sess.accessJwt)
-      )
-    );
-    record.embed = {
-      $type: "app.bsky.embed.images",
-      images: uploadResults.map((result, i) => ({
-        alt: images[i].alt || "",
-        image: result.blob,
-      })),
-    };
-  }
+  if (embed) record.embed = embed;
 
   // Reply chain
   if (parent) {
