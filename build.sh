@@ -12,20 +12,40 @@ OUT="x-to-bsky-v${VERSION}.zip"
 # Clean previous build
 rm -f "$OUT"
 
-# Package — include only the required files
-zip -r "$OUT" \
-  manifest.json \
-  background.js \
-  lib.js \
-  shared.js \
-  content.js \
-  content.css \
-  popup.html \
-  popup.js \
-  options.html \
-  options.js \
-  icons/*.png \
-  --exclude 'icons/*.html' 'icons/*.svg'
+# Files to include in the package
+FILES=(
+  manifest.json
+  background.js
+  lib.js
+  shared.js
+  content.js
+  content.css
+  popup.html
+  popup.js
+  options.html
+  options.js
+  icons/icon16.png
+  icons/icon48.png
+  icons/icon128.png
+)
+
+# Package — use zip if available, otherwise fall back to Python
+if command -v zip &>/dev/null; then
+  zip "$OUT" "${FILES[@]}"
+else
+  python3 -c "
+import zipfile, sys
+with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
+    for f in sys.argv[2:]:
+        z.write(f)
+" "$OUT" "${FILES[@]}" 2>/dev/null ||
+  python -c "
+import zipfile, sys
+with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
+    for f in sys.argv[2:]:
+        z.write(f)
+" "$OUT" "${FILES[@]}"
+fi
 
 echo ""
 echo "=== Built: $OUT ==="

@@ -16,7 +16,7 @@ X (Twitter) の投稿ボタンをフックし、同じテキスト・画像を B
 
 ## セットアップ
 
-### 1. ���張をインストール
+### 1. 拡張をインストール
 
 [Chrome Web Store](https://chromewebstore.google.com/) からインストール
 
