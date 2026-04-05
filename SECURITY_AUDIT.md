@@ -198,7 +198,6 @@
 1. **`chrome.storage.session` の検討** — セッショントークンをストレージにキャッシュする場合に使用（ブラウザ終了時に消去）
 2. **`sender.id` 検証の追加** — `onMessage` ハンドラで多層防御として送信元を検証
 3. **AT Protocol の変更を監視** — Bluesky の新しい認証要件（DPoP/OAuth 移行等）への対応
-4. **Chrome Web Store 審査対策** — `optional_host_permissions` に `<all_urls>` を使用する理由の説明を準備（リンクカード用 OGP メタデータ取得）
 
 ---
 
