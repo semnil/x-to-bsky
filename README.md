@@ -18,7 +18,7 @@ X (Twitter) の投稿ボタンをフックし、同じテキスト・画像を B
 
 ### 1. 拡張をインストール
 
-[Chrome Web Store](https://chromewebstore.google.com/) からインストール
+[Chrome Web Store](https://chromewebstore.google.com/detail/x-to-bluesky-crossposter/mbbbnhfamflofopokhphhkinpggkogke) からインストール
 
 > **開発版を使う場合**: `chrome://extensions` → デベロッパーモード ON → 「パッケージ化されていない拡張機能を読み込む」でこのリポジトリのフォルダを指定
 
