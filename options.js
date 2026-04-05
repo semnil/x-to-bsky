@@ -116,7 +116,7 @@ function applyLanguage() {
 
 // DEFAULT_SELECTORS is provided by shared.js (loaded before this file).
 
-const SELECTOR_KEYS = ["postButton", "tweetTextarea", "textSpan", "fallbackEditor", "quoteTweetLink"];
+const SELECTOR_KEYS = Object.keys(DEFAULT_SELECTORS);
 
 // ─── DOM References ──────────────────────────────────────
 

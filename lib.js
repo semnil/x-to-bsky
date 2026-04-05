@@ -9,13 +9,14 @@ const FACET_TAG = "app.bsky.richtext.facet#tag";
 
 // ─── Grapheme Utilities ─────────────────────────────────
 
+const graphemeSegmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
+
 /**
  * Segment text into graphemes via Intl.Segmenter.
  * Returns array of grapheme strings.
  */
 function segmentGraphemes(text) {
-  const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
-  return [...segmenter.segment(text)].map((s) => s.segment);
+  return [...graphemeSegmenter.segment(text)].map((s) => s.segment);
 }
 
 /**

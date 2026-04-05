@@ -1,7 +1,7 @@
 # Security Audit Report — X to Bluesky Crossposter
 
-**Date**: 2026-04-05
-**Scope**: All source files (manifest.json, background.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
+**Date**: 2026-04-05 (updated)
+**Scope**: All source files (manifest.json, background.js, lib.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
 **Methodology**: OWASP Top 10 for Browser Extensions, Chrome MV3 security model review, AT Protocol credential handling analysis
 
 ---
@@ -166,6 +166,43 @@ This Chrome extension cross-posts from X (Twitter) to Bluesky. It stores Bluesky
 | 4.1 | No sender validation in message handler | LOW | Acceptable (MV3 enforces isolation) |
 | 4.2 | Content script data trusted by background | LOW | Acceptable (x.com trust boundary) |
 | 6.1 | Post history in cleartext | LOW | Acceptable (user's own data) |
+
+**No CRITICAL or HIGH severity findings.**
+
+---
+
+## 9. Changes Since Initial Audit
+
+### 9.1 ES module refactoring (GOOD)
+
+- **Detail**: Pure functions extracted from `background.js` to `lib.js`. Background service worker now uses `"type": "module"` in manifest.
+- **Assessment**: No security impact. ES modules have stricter scope isolation than classic scripts.
+
+### 9.2 Quote RT URL feature — DOM extraction (LOW)
+
+- **Location**: `content.js:extractQuoteUrl()`
+- **Detail**: New feature extracts quoted tweet URLs from the compose area DOM. Uses `findComposeContainer()` which walks up 10 parent levels. The fallback search matches any `a[href*="/status/"]` in the container.
+- **Assessment**: Low risk — feature is disabled by default. The extracted URL is user-visible content (X post links) appended as plain text, processed by `parseFacets` as a link facet. No script injection vector since the URL is validated against a strict regex (`STATUS_URL_RE`).
+- **Recommendation**: None required. Default-off mitigates accidental data exposure.
+
+### 9.3 storage.onChanged listener (INFORMATIONAL)
+
+- **Location**: `content.js:27-31`
+- **Detail**: Listens to `chrome.storage.onChanged` for `includeQuoteUrl` setting changes. Only reads boolean values from extension-controlled storage.
+- **Assessment**: No security concern. `chrome.storage.onChanged` is extension-scoped.
+
+---
+
+## Summary of Findings
+
+| # | Finding | Severity | Status |
+|---|---------|----------|--------|
+| 1.1 | App Password in chrome.storage.local (plaintext at rest) | MEDIUM | Accepted risk — documented in UI |
+| 3.1 | innerHTML with i18n-html values | LOW | Safe (developer-controlled strings) |
+| 4.1 | No sender validation in message handler | LOW | Acceptable (MV3 enforces isolation) |
+| 4.2 | Content script data trusted by background | LOW | Acceptable (x.com trust boundary) |
+| 6.1 | Post history in cleartext | LOW | Acceptable (user's own data) |
+| 9.2 | Quote URL DOM extraction | LOW | Default-off, validated by regex |
 
 **No CRITICAL or HIGH severity findings.**
 

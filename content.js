@@ -8,6 +8,7 @@
   const TOAST_DURATION = 4000;
   const MIN_IMAGE_PX = 80;       // skip images smaller than this (icons, emoji)
   const PARENT_WALK_DEPTH = 10;  // levels to walk up from textarea to find compose block
+  const STATUS_URL_RE = /https?:\/\/(x\.com|twitter\.com)\/[^/]+\/status\/\d+/;
 
   let enabled = true;
   let configured = false;
@@ -68,6 +69,20 @@
       toast.classList.remove("xtobsky-toast--visible");
       setTimeout(() => toast.remove(), 300);
     }, TOAST_DURATION);
+  }
+
+  // ─── DOM Helpers ─────────────────────────────────────────
+
+  /**
+   * Walk up from an element to find the nearest compose container.
+   */
+  function findComposeContainer(el) {
+    let container = el;
+    for (let i = 0; i < PARENT_WALK_DEPTH; i++) {
+      if (!container.parentElement || container.parentElement === document.body) break;
+      container = container.parentElement;
+    }
+    return container;
   }
 
   // ─── Text Extraction ────────────────────────────────────
@@ -132,12 +147,7 @@
     const textarea = getTextareaEl(index);
     if (!textarea) return [];
 
-    let container = textarea;
-    for (let i = 0; i < PARENT_WALK_DEPTH; i++) {
-      if (!container.parentElement || container.parentElement === document.body) break;
-      container = container.parentElement;
-    }
-
+    const container = findComposeContainer(textarea);
     const imgs = container.querySelectorAll("img");
     const results = [];
 
@@ -165,8 +175,7 @@
     // Try the configurable selector first
     const link = document.querySelector(selectors.quoteTweetLink);
     if (link) {
-      const href = link.href;
-      const match = href.match(/https?:\/\/(x\.com|twitter\.com)\/[^/]+\/status\/\d+/);
+      const match = link.href.match(STATUS_URL_RE);
       if (match) return match[0];
     }
 
@@ -174,15 +183,10 @@
     const textarea = getTextareaEl(0);
     if (!textarea) return null;
 
-    let container = textarea;
-    for (let i = 0; i < PARENT_WALK_DEPTH; i++) {
-      if (!container.parentElement || container.parentElement === document.body) break;
-      container = container.parentElement;
-    }
-
+    const container = findComposeContainer(textarea);
     const links = container.querySelectorAll('a[href*="/status/"]');
     for (const a of links) {
-      const m = a.href.match(/https?:\/\/(x\.com|twitter\.com)\/[^/]+\/status\/\d+/);
+      const m = a.href.match(STATUS_URL_RE);
       if (m) return m[0];
     }
 
