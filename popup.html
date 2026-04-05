@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 280px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #16181c;
+      color: #e7e9ea;
+      padding: 16px;
+    }
+    h1 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status {
+      font-size: 13px;
+      color: #71767b;
+      margin-bottom: 12px;
+    }
+    .status .handle {
+      color: #0085ff;
+      font-weight: 600;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+    .row label {
+      font-size: 14px;
+    }
+    /* Toggle switch */
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+    }
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle .slider {
+      position: absolute;
+      inset: 0;
+      background-color: #3a3b3c;
+      border-radius: 11px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .toggle .slider::before {
+      content: "";
+      position: absolute;
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #e7e9ea;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle input:checked + .slider {
+      background-color: #0085ff;
+    }
+    .toggle input:checked + .slider::before {
+      transform: translateX(18px);
+    }
+    .settings-link {
+      display: block;
+      margin-top: 12px;
+      font-size: 13px;
+      color: #0085ff;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .settings-link:hover {
+      text-decoration: underline;
+    }
+    .not-configured {
+      font-size: 13px;
+      color: #f4212e;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🦋 X → Bluesky</h1>
+
+  <div id="not-configured" class="not-configured" style="display:none;">
+    未設定。設定画面で Bluesky 認証情報を入力してください。
+  </div>
+
+  <div id="status" class="status" style="display:none;">
+    接続先: <span id="handle" class="handle"></span>
+  </div>
+
+  <div class="row">
+    <label for="toggle">クロスポスト</label>
+    <div class="toggle">
+      <input type="checkbox" id="toggle" checked>
+      <span class="slider"></span>
+    </div>
+  </div>
+
+  <a id="settings-link" class="settings-link">設定を開く</a>
+
+  <script src="popup.js"></script>
+</body>
+</html>

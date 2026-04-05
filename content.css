@@ -1,0 +1,49 @@
+/* content.css — Toast notification and badge styles for X to Bluesky crosspost */
+
+.xtobsky-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #fff;
+  z-index: 999999;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.xtobsky-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.xtobsky-toast--success {
+  background-color: #0085ff;
+}
+
+.xtobsky-toast--error {
+  background-color: #d32f2f;
+}
+
+.xtobsky-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
+  filter: saturate(1.2);
+  transition: opacity 0.2s ease;
+}
+
+.xtobsky-badge--off {
+  opacity: 0.3;
+  filter: grayscale(1);
+}

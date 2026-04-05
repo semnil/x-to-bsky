@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>X to Bluesky — Settings</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #000;
+      color: #e7e9ea;
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+    .container {
+      width: 100%;
+      max-width: 480px;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .subtitle {
+      font-size: 14px;
+      color: #71767b;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .field {
+      margin-bottom: 16px;
+    }
+    .field label {
+      display: block;
+      font-size: 13px;
+      color: #71767b;
+      margin-bottom: 4px;
+    }
+    .field input {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 15px;
+      background: #16181c;
+      border: 1px solid #333639;
+      border-radius: 6px;
+      color: #e7e9ea;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .field input:focus {
+      border-color: #0085ff;
+    }
+    .field .hint {
+      font-size: 12px;
+      color: #71767b;
+      margin-top: 4px;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .btn-primary {
+      background: #0085ff;
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: #0070dd;
+    }
+    .btn-secondary {
+      background: transparent;
+      color: #0085ff;
+      border: 1px solid #333639;
+    }
+    .btn-secondary:hover {
+      background: #16181c;
+    }
+    .btn-danger {
+      background: transparent;
+      color: #f4212e;
+      border: 1px solid #333639;
+      padding: 6px 14px;
+      font-size: 13px;
+    }
+    .btn-danger:hover {
+      background: #f4212e22;
+    }
+    .message {
+      margin-top: 16px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      display: none;
+    }
+    .message--success {
+      background: #0085ff22;
+      color: #0085ff;
+      display: block;
+    }
+    .message--error {
+      background: #f4212e22;
+      color: #f4212e;
+      display: block;
+    }
+    .security-note {
+      margin-top: 24px;
+      padding: 12px;
+      background: #16181c;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #71767b;
+      line-height: 1.6;
+    }
+    .security-note strong {
+      color: #e7e9ea;
+    }
+
+    /* ─── Advanced Section ─── */
+    .section-divider {
+      margin: 32px 0 24px;
+      border: none;
+      border-top: 1px solid #333639;
+    }
+    details.advanced {
+      margin-top: 24px;
+    }
+    details.advanced summary {
+      font-size: 14px;
+      font-weight: 600;
+      color: #71767b;
+      cursor: pointer;
+      padding: 8px 0;
+      user-select: none;
+    }
+    details.advanced summary:hover {
+      color: #e7e9ea;
+    }
+    details.advanced .advanced-body {
+      margin-top: 12px;
+    }
+    details.advanced .field input {
+      font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+      font-size: 13px;
+    }
+    .selector-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    /* ─── History Section ─── */
+    .history-section {
+      margin-top: 32px;
+    }
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .history-empty {
+      font-size: 13px;
+      color: #71767b;
+      padding: 16px 0;
+    }
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .history-item {
+      padding: 10px 12px;
+      background: #16181c;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .history-item--error {
+      border-left: 3px solid #f4212e;
+    }
+    .history-item--success {
+      border-left: 3px solid #0085ff;
+    }
+    .history-meta {
+      display: flex;
+      gap: 8px;
+      font-size: 11px;
+      color: #71767b;
+      margin-bottom: 4px;
+    }
+    .history-text {
+      color: #e7e9ea;
+      word-break: break-word;
+    }
+    .history-error {
+      color: #f4212e;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+    .history-badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .history-badge--thread {
+      background: #0085ff33;
+      color: #0085ff;
+    }
+    .history-badge--images {
+      background: #7856ff33;
+      color: #7856ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 data-i18n="title">🦋 X to Bluesky — 設定</h1>
+    <p class="subtitle" data-i18n-html="subtitle">
+      Bluesky の認証情報を入力してください。<br>
+      App Password を使用します（メインパスワードは使用しません）。
+    </p>
+
+    <div class="field">
+      <label for="handle" data-i18n="handleLabel">Bluesky ハンドル</label>
+      <input type="text" id="handle" data-i18n-placeholder="handlePlaceholder" placeholder="yourname.bsky.social" autocomplete="off" spellcheck="false">
+      <div class="hint" data-i18n="handleHint">例: yourname.bsky.social</div>
+    </div>
+
+    <div class="field">
+      <label for="password" data-i18n="passwordLabel">App Password</label>
+      <input type="password" id="password" data-i18n-placeholder="passwordPlaceholder" placeholder="xxxx-xxxx-xxxx-xxxx" autocomplete="off">
+      <div class="hint" data-i18n-html="passwordHint">
+        Bluesky →
+        <strong>設定</strong> →
+        <strong>プライバシーとセキュリティ</strong> →
+        <strong>アプリパスワード</strong> で発行できます
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" id="save" data-i18n="saveBtn">保存</button>
+      <button class="btn-secondary" id="test" data-i18n="testBtn">接続テスト</button>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <div class="security-note" data-i18n-html="securityNote">
+      <strong>セキュリティについて</strong><br>
+      • 認証情報は chrome.storage.local に保存され、この拡張のみがアクセスします。<br>
+      • 外部サーバーへの送信は一切行いません。通信先は bsky.social のみです。<br>
+      • アプリパスワードは Bluesky の 設定 → プライバシーとセキュリティ → アプリパスワード からいつでも無効化できます。
+    </div>
+
+    <!-- ─── Advanced: DOM Selectors ─── -->
+    <details class="advanced">
+      <summary data-i18n="advancedTitle">⚙ 高度な設定 — DOM セレクタ</summary>
+      <div class="advanced-body">
+        <p class="hint" style="margin-bottom: 12px;" data-i18n="advancedDesc">
+          X の DOM 構造が変更された場合にセレクタを更新できます。
+        </p>
+
+        <div class="field">
+          <label for="sel-postButton" data-i18n="selPostButton">投稿ボタン</label>
+          <input type="text" id="sel-postButton">
+        </div>
+        <div class="field">
+          <label for="sel-tweetTextarea" data-i18n="selTextarea">テキストエリア (${n} = インデックス)</label>
+          <input type="text" id="sel-tweetTextarea">
+        </div>
+        <div class="field">
+          <label for="sel-textSpan" data-i18n="selTextSpan">テキストスパン</label>
+          <input type="text" id="sel-textSpan">
+        </div>
+        <div class="field">
+          <label for="sel-fallbackEditor" data-i18n="selFallback">フォールバックエディタ</label>
+          <input type="text" id="sel-fallbackEditor">
+        </div>
+
+        <div class="selector-actions">
+          <button class="btn-primary" id="saveSelectors" data-i18n="saveSelectorsBtn">セレクタを保存</button>
+          <button class="btn-secondary" id="resetSelectors" data-i18n="resetSelectorsBtn">デフォルトに戻す</button>
+        </div>
+        <div id="selectorMessage" class="message" style="margin-top: 8px;"></div>
+      </div>
+    </details>
+
+    <!-- ─── Post History ─── -->
+    <hr class="section-divider">
+
+    <div class="history-section">
+      <div class="history-header">
+        <h2 data-i18n="historyTitle">投稿履歴</h2>
+        <button class="btn-danger" id="clearHistory" data-i18n="clearHistoryBtn">クリア</button>
+      </div>
+      <div id="history-list"></div>
+    </div>
+  </div>
+
+  <script src="shared.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

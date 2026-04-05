@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash build.sh)",
+      "Bash(powershell -Command ':*)",
+      "Bash(node -e \"console.log\\('node available'\\)\")",
+      "Bash(npm ls:*)",
+      "Bash(node -e \"require\\('sharp'\\)\")",
+      "Bash(node -e \"require\\('canvas'\\)\")",
+      "Bash(ls -la icons/icon*.png)",
+      "Read(//g/Share/workspace/semnil/x-to-bsky/**)"
+    ]
+  }
+}
