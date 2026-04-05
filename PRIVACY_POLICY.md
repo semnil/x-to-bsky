@@ -68,4 +68,4 @@ Updates will be posted to this page with a revised date. Continued use of the ex
 
 ## Contact
 
-If you have questions about this privacy policy, please open an issue on the [GitHub repository](https://github.com/semnil/x-to-bsky).
+If you have questions about this privacy policy, please open an [issue](https://github.com/semnil/x-to-bsky/issues) on the GitHub repository.
