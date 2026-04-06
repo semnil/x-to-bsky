@@ -78,7 +78,6 @@ x-to-bsky/
 
 ## コーディング規約
 
-- JA discussion, EN code（コメントは EN）
 - 外部ライブラリ・ビルドツール不使用。生 JS のみ
 - セミコロンあり、ダブルクォート不統一（manifest は JSON 標準）
 - 関数に JSDoc コメント付与済み

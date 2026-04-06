@@ -93,11 +93,27 @@
     const textarea = getTextareaEl(index);
     if (!textarea) return null;
 
+    // Group spans by their parent block to preserve line breaks correctly.
+    // DraftJS splits inline entities (hashtags, mentions, URLs) into separate
+    // <span data-text="true"> within the same block — these must be concatenated
+    // without newlines. Only different blocks represent actual line breaks.
+    const blocks = textarea.querySelectorAll("[data-block]");
+    if (blocks.length > 0) {
+      return Array.from(blocks)
+        .map((block) => {
+          const spans = block.querySelectorAll(selectors.textSpan);
+          return Array.from(spans).map((s) => s.textContent).join("");
+        })
+        .join("\n")
+        .trim();
+    }
+
+    // Fallback: no block structure found
     const spans = textarea.querySelectorAll(selectors.textSpan);
     if (spans.length > 0) {
       return Array.from(spans)
         .map((el) => el.textContent)
-        .join("\n")
+        .join("")
         .trim();
     }
     return "";
