@@ -30,20 +30,13 @@
     }
   });
 
-  // Fetch initial status with retry (V08: service worker may not be ready yet)
-  function fetchStatus(retries) {
-    chrome.runtime.sendMessage({ type: "GET_STATUS" }, (res) => {
-      if (chrome.runtime.lastError && retries > 0) {
-        setTimeout(() => fetchStatus(retries - 1), 500);
-        return;
-      }
-      if (res) {
-        enabled = res.enabled;
-        configured = res.configured;
-      }
-    });
-  }
-  fetchStatus(3);
+  // Fetch initial status (service worker may not be ready yet)
+  sendMessageWithRetry({ type: "GET_STATUS" }, (res) => {
+    if (res) {
+      enabled = res.enabled;
+      configured = res.configured;
+    }
+  });
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "TOGGLE_CROSSPOST") {
@@ -238,6 +231,39 @@
     return filtered;
   }
 
+  // ─── Message Helpers ─────────────────────────────────────
+
+  /**
+   * Send a read-only message to the background service worker with retry.
+   * MV3 service workers may be inactive; the first sendMessage wakes them,
+   * but the response can be lost. Retry transparently on failure.
+   * Only safe for idempotent (read-only) messages.
+   */
+  function sendMessageWithRetry(msg, callback, retries = 2) {
+    chrome.runtime.sendMessage(msg, (res) => {
+      if (chrome.runtime.lastError && retries > 0) {
+        setTimeout(() => sendMessageWithRetry(msg, callback, retries - 1), 500);
+        return;
+      }
+      callback(res);
+    });
+  }
+
+  /**
+   * Wake the service worker with a lightweight ping, then send the real message.
+   * Avoids retrying non-idempotent messages (e.g. POST_TO_BSKY) which could
+   * cause duplicate posts if the first attempt partially succeeds.
+   */
+  function sendMessageWithWakeup(msg, callback) {
+    chrome.runtime.sendMessage({ type: "GET_STATUS" }, () => {
+      // Ignore wake-up response/error; service worker is now active
+      void chrome.runtime.lastError;
+      chrome.runtime.sendMessage(msg, (res) => {
+        callback(res, chrome.runtime.lastError);
+      });
+    });
+  }
+
   // ─── Post Button Handler ────────────────────────────────
 
   function handlePostClick(event) {
@@ -247,10 +273,13 @@
     if (!target) return;
 
     const thread = extractComposeThread();
-    if (thread.length === 0) return;
+    if (thread.length === 0) {
+      showToast("Bluesky: no text found (selector mismatch?)", true);
+      return;
+    }
 
-    chrome.runtime.sendMessage({ type: "POST_TO_BSKY", thread }, (res) => {
-      if (chrome.runtime.lastError) {
+    sendMessageWithWakeup({ type: "POST_TO_BSKY", thread }, (res, err) => {
+      if (err) {
         showToast("Bluesky: extension error", true);
         return;
       }
