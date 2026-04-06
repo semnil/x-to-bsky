@@ -175,6 +175,7 @@
 - **オプション権限**: `optional_host_permissions` + `chrome.permissions.request()` で設定画面のトグル操作時に権限を付与。無効化時に `chrome.permissions.remove()` で自動解除。
 - **スレッド投稿のセッション再利用**: `postThread()` で一度取得した session を全ポストに渡す。スレッド投稿中の不要な再認証・storage 読み取りを排除。
 - **設定マイグレーション**: `chrome.runtime.onInstalled` で旧設定キーを自動マイグレーション。マイグレーション後に旧キーを削除。
+- **Service worker 起動対策**: MV3 の service worker 非アクティブ問題に対し、初期状態取得 (`GET_STATUS`) はリトライ付きで送信。投稿 (`POST_TO_BSKY`) はリトライせず、事前に `GET_STATUS` で service worker を起動してから送信する wakeup 方式を採用。重複投稿を防止。
 
 ---
 
