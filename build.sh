@@ -27,6 +27,8 @@ FILES=(
   icons/icon16.png
   icons/icon48.png
   icons/icon128.png
+  _locales/ja/messages.json
+  _locales/en/messages.json
 )
 
 # Package — use zip if available, otherwise fall back to Python
