@@ -127,10 +127,39 @@
    */
   const MAX_IMAGE_DIMENSION = 2048; // downscale large images to limit message size (V07)
 
+  /**
+   * Calculate the visible source rectangle when object-fit is applied.
+   * Returns { sx, sy, sw, sh } — the portion of the natural image that is visible.
+   */
+  function getVisibleRect(img) {
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+    const dw = img.clientWidth;
+    const dh = img.clientHeight;
+    if (!dw || !dh) return { sx: 0, sy: 0, sw: nw, sh: nh };
+
+    const style = getComputedStyle(img);
+    if (style.objectFit !== "cover") return { sx: 0, sy: 0, sw: nw, sh: nh };
+
+    const scale = Math.max(dw / nw, dh / nh);
+    const sw = Math.round(dw / scale);
+    const sh = Math.round(dh / scale);
+
+    const parts = style.objectPosition.split(/\s+/);
+    const px = parseFloat(parts[0]) / 100;
+    const py = parseFloat(parts[1] || parts[0]) / 100;
+
+    const sx = Math.round((nw - sw) * px);
+    const sy = Math.round((nh - sh) * py);
+    return { sx, sy, sw, sh };
+  }
+
   function captureImageToBase64(img) {
     try {
-      let w = img.naturalWidth;
-      let h = img.naturalHeight;
+      if (!img.naturalWidth || !img.naturalHeight) return null;
+      const { sx, sy, sw, sh } = getVisibleRect(img);
+      let w = sw;
+      let h = sh;
       if (w > MAX_IMAGE_DIMENSION || h > MAX_IMAGE_DIMENSION) {
         const scale = MAX_IMAGE_DIMENSION / Math.max(w, h);
         w = Math.round(w * scale);
@@ -140,7 +169,7 @@
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, w, h);
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
       return canvas.toDataURL("image/jpeg", 0.92);
     } catch {
       return null;
