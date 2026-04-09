@@ -45,10 +45,12 @@ x-to-bsky/
 - `document.addEventListener("click", handler, true)` で capture phase フック
 - セレクタはデフォルト定義 + `chrome.storage.local.customSelectors` で上書き可能
 - テキスト抽出: `tweetTextarea_${n}` を 0 からインクリメントしてスレッド全体を取得
-- 画像抽出: textarea 近傍の `<img>` を canvas 経由で base64 キャプチャ (同期処理)
+- 画像抽出: textarea 近傍の `<img>` を canvas 経由で base64 キャプチャ (同期処理)。`object-fit: cover` の画像は `getVisibleRect()` で表示領域のみをクロップしてキャプチャ
 - フォールバック: `.DraftEditor-root [data-text="true"]`
 - 投稿ボタンに 🦋 バッジを MutationObserver で動的付与
 - トースト通知で Bluesky 投稿結果を表示 (成功: 青, 失敗: 赤, スレッド件数表示)
+- Service worker 起動: `sendMessageWithWakeup()` で `GET_STATUS` ping 後に本メッセージ送信。1秒タイムアウトのフォールバック付き。非冪等メッセージはリトライしない
+- 拡張コンテキスト無効化ガード: `chrome.runtime?.id` チェックでリロード後のサイレント失敗を防止
 
 ### background.js
 

@@ -1,6 +1,6 @@
 # セキュリティ監査レポート — X to Bluesky Crossposter
 
-**日付**: 2026-04-05
+**日付**: 2026-04-05 (2026-04-09 更新)
 **対象**: 全ソースファイル (manifest.json, background.js, lib.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
 **手法**: OWASP Top 10 for Browser Extensions、Chrome MV3 セキュリティモデルレビュー、AT Protocol 認証情報取り扱い分析
 
@@ -123,6 +123,33 @@
 
 ## 6. データ露出
 
+### 6.0 content.js 変更点のセキュリティレビュー (2026-04-09) (INFORMATIONAL)
+
+#### `getVisibleRect(img)` — getComputedStyle / インジェクションリスク
+
+- **詳細**: `getComputedStyle(img)` で `objectFit`・`objectPosition` を読み取り、canvas の描画クロップ領域を計算する。
+- **評価**: 安全。`getComputedStyle` はレイアウト情報の読み取りのみで、DOM 書き込みや eval を行わない。`objectPosition` の値 (`parseFloat`) は数値として扱われるため文字列インジェクションリスクなし。`img.clientWidth`/`clientHeight` が 0 の場合は `{ sx:0, sy:0, sw:nw, sh:nh }` にフォールバックするため、ゼロ除算・無限大の伝播も発生しない。
+
+#### `captureImageToBase64` — canvas tainted-canvas / データ漏洩
+
+- **詳細**: `drawImage` の呼び出しが `(img, 0, 0, w, h)` から `(img, sx, sy, sw, sh, 0, 0, w, h)` に変更された（ソース矩形を明示指定するオーバーロード）。
+- **評価**: クロスオリジン画像 (`pbs.twimg.com` 等) は従来同様 tainted canvas となり `canvas.toDataURL()` が例外を投げる。`catch` ブロックが `null` を返すため、クロスオリジン画像データが外部に漏洩することはない。ローカル添付 (`blob:` URL) のみキャプチャ成功する挙動も変化なし。`getVisibleRect` が canvas に新たなクロスオリジンアクセス経路を開くことはない。
+
+#### `sendMessageWithWakeup` — タイムアウト悪用 / レースコンディション
+
+- **詳細**: `GET_STATUS` コールバックと `setTimeout(send, 1000)` の両方が `send()` を呼び出す設計に変更。`sent` フラグによりいずれか一方のみが実際に送信される。
+- **評価**:
+  - `sent` フラグは同一 closure スコープ内のローカル変数であり、外部から操作不能。
+  - タイムアウトはブラウザの `setTimeout` であり、攻撃者がページスクリプトから `send()` を直接呼び出すことはできない（IIFE スコープ内のクロージャ）。
+  - タイムアウトが先に発火した場合でも、後続の `GET_STATUS` コールバックは `sent === true` で即 return するため重複送信なし。
+  - `chrome.runtime.sendMessage` はこの拡張の service worker にのみ到達するため、メッセージスプーフィングのリスクなし（MV3 の拡張分離が保証）。
+  - 1000ms タイムアウトは過度に短くなく、かつ UI の反応遅延を招く長さでもない。DoS ベクターとして利用不可。
+
+#### `handlePostClick` — コンテキスト無効化ガード
+
+- **詳細**: `chrome.runtime?.id` が falsy の場合に早期リターンする guard 節と、`sendMessageWithWakeup` 呼び出し全体を `try/catch` で囲む変更が追加された。
+- **評価**: 拡張のリロード後に旧コンテンツスクリプトが動作し続ける場合、`chrome.runtime` が無効化され例外を投げる。これを `chrome.runtime?.id` チェックと `catch` ブロックで安全にハンドリングする防御的実装。bypass の余地はない — `chrome.runtime.id` は Chrome が管理するプロパティであり、ページスクリプトから偽装することはできない (`chrome.runtime` オブジェクトはコンテンツスクリプト専用の独立したバインディング)。ユーザーへのフィードバック ("please reload this page") は適切。
+
 ### 6.1 投稿時のメモリ内 Base64 画像データ (INFORMATIONAL)
 
 - **詳細**: 画像データ全体 (base64) がコンテンツスクリプトと Service worker 間の Chrome メッセージチャネルを通過する。メモリ内のみで永続化されない。
@@ -188,6 +215,7 @@
 | 4.1 | メッセージハンドラで送信元検証なし | LOW | 許容（MV3 が分離を強制） |
 | 4.2 | コンテンツスクリプトのデータを信頼 | LOW | 許容（x.com 信頼境界） |
 | 5.3 | リンクカード用外部 URL fetch | LOW | ユーザー入力起点、head のみ解析 |
+| 6.0 | content.js 変更点 (getVisibleRect / sendMessageWithWakeup / コンテキストガード) | INFO | 問題なし — 詳細は §6.0 参照 |
 | 6.2 | リンクカード外部通信 | LOW-MEDIUM | デフォルト無効、optional_host_permissions |
 
 **CRITICAL または HIGH の所見なし。**
