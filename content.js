@@ -300,13 +300,25 @@
    * cause duplicate posts if the first attempt partially succeeds.
    */
   function sendMessageWithWakeup(msg, callback) {
-    chrome.runtime.sendMessage({ type: "GET_STATUS" }, () => {
-      // Ignore wake-up response/error; service worker is now active
-      void chrome.runtime.lastError;
+    let sent = false;
+    let timer;
+    function send() {
+      if (sent) return;
+      sent = true;
+      clearTimeout(timer);
+      if (!chrome.runtime?.id) {
+        callback(undefined, { message: "Extension context invalidated" });
+        return;
+      }
       chrome.runtime.sendMessage(msg, (res) => {
         callback(res, chrome.runtime.lastError);
       });
+    }
+    chrome.runtime.sendMessage({ type: "GET_STATUS" }, () => {
+      void chrome.runtime.lastError;
+      send();
     });
+    timer = setTimeout(send, 1000);
   }
 
   // ─── Post Button Handler ────────────────────────────────
@@ -317,27 +329,37 @@
     const target = event.target.closest(selectors.postButton);
     if (!target) return;
 
+    // Guard: extension context may be invalidated after extension reload
+    if (!chrome.runtime?.id) {
+      showToast("Bluesky: please reload this page", true);
+      return;
+    }
+
     const thread = extractComposeThread();
     if (thread.length === 0) {
       showToast("Bluesky: no text found (selector mismatch?)", true);
       return;
     }
 
-    sendMessageWithWakeup({ type: "POST_TO_BSKY", thread }, (res, err) => {
-      if (err) {
-        showToast("Bluesky: extension error", true);
-        return;
-      }
-      if (res && res.ok) {
-        const msg =
-          res.postCount > 1
-            ? `Bluesky: posted thread (${res.postCount} posts) ✓`
-            : "Bluesky: posted ✓";
-        showToast(msg);
-      } else {
-        showToast(`Bluesky: ${res?.error || "unknown error"}`, true);
-      }
-    });
+    try {
+      sendMessageWithWakeup({ type: "POST_TO_BSKY", thread }, (res, err) => {
+        if (err) {
+          showToast("Bluesky: extension error", true);
+          return;
+        }
+        if (res && res.ok) {
+          const msg =
+            res.postCount > 1
+              ? `Bluesky: posted thread (${res.postCount} posts) ✓`
+              : "Bluesky: posted ✓";
+          showToast(msg);
+        } else {
+          showToast(`Bluesky: ${res?.error || "unknown error"}`, true);
+        }
+      });
+    } catch {
+      showToast("Bluesky: please reload this page", true);
+    }
   }
 
   // Capture phase — runs before X's own handler
