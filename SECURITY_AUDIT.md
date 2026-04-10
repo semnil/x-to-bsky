@@ -1,6 +1,6 @@
 # セキュリティ監査レポート — X to Bluesky Crossposter
 
-**日付**: 2026-04-05 (2026-04-09 更新)
+**日付**: 2026-04-05 (2026-04-09 更新, 2026-04-10 更新)
 **対象**: 全ソースファイル (manifest.json, background.js, lib.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
 **手法**: OWASP Top 10 for Browser Extensions、Chrome MV3 セキュリティモデルレビュー、AT Protocol 認証情報取り扱い分析
 
@@ -150,12 +150,22 @@
 - **詳細**: `chrome.runtime?.id` が falsy の場合に早期リターンする guard 節と、`sendMessageWithWakeup` 呼び出し全体を `try/catch` で囲む変更が追加された。
 - **評価**: 拡張のリロード後に旧コンテンツスクリプトが動作し続ける場合、`chrome.runtime` が無効化され例外を投げる。これを `chrome.runtime?.id` チェックと `catch` ブロックで安全にハンドリングする防御的実装。bypass の余地はない — `chrome.runtime.id` は Chrome が管理するプロパティであり、ページスクリプトから偽装することはできない (`chrome.runtime` オブジェクトはコンテンツスクリプト専用の独立したバインディング)。ユーザーへのフィードバック ("please reload this page") は適切。
 
-### 6.1 投稿時のメモリ内 Base64 画像データ (INFORMATIONAL)
+### 6.1 aspectRatio フィールドの追加 (2026-04-10) (INFORMATIONAL)
+
+- **場所**: `content.js:captureImageToBase64()`、`background.js:createPost()`
+- **詳細**: `captureImageToBase64` の戻り値を `string` から `{ base64, width, height }` に変更し、canvas 描画後の実寸法 (`Math.round` 済み正整数) を返すようにした。`createPost` はこれを AT Protocol の `aspectRatio: { width, height }` フィールドとして `app.bsky.embed.images` に付与する。
+- **評価**:
+  - **値の操作可能性**: `width`/`height` は `canvas.width`/`canvas.height` から取得される。canvas サイズは `captureImageToBase64` 内で `Math.round(img.clientWidth * dpr)` 等で決定され、外部スクリプトが直接書き換える経路はない。コンテンツスクリプトは IIFE スコープで実行されるため、ページスクリプトから変数を差し替えることはできない。
+  - **AT Protocol インジェクション**: `aspectRatio` フィールドの値は正整数に限定される。Bluesky の lexicon (`app.bsky.embed.images#aspectRatio`) は `width`/`height` を `integer` 型で定義しており、文字列やオブジェクトネストによるインジェクションベクターは存在しない。JSON シリアライズ時も数値として出力される。
+  - **プロトタイプ汚染**: `{ ...(condition ? { aspectRatio: { width, height } } : {}) }` のスプレッド演算子は新規オブジェクトを生成する。`{}` リテラルは `Object.prototype` を継承するが、スプレッド元が自前のオブジェクトリテラルであるため `__proto__` や getter の混入は発生しない。AT Protocol ライブラリは使用しておらず、`JSON.stringify` → `fetch` の経路でプロトタイプ汚染が波及することもない。
+  - **情報露出**: 画像の幅・高さはメタデータに過ぎず、センシティブ情報を含まない。canvas の描画内容そのもの (base64) は既に送信されており、寸法の追加送信は攻撃面を拡大しない。
+
+### 6.2 投稿時のメモリ内 Base64 画像データ (INFORMATIONAL)
 
 - **詳細**: 画像データ全体 (base64) がコンテンツスクリプトと Service worker 間の Chrome メッセージチャネルを通過する。メモリ内のみで永続化されない。
 - **評価**: 許容範囲。画像はユーザー自身のコンポーズエリアから取得される。
 
-### 6.2 リンクカード外部通信 (LOW-MEDIUM)
+### 6.3 リンクカード外部通信 (LOW-MEDIUM)
 
 - **場所**: `background.js:fetchOgpMetadata()`, `background.js:uploadThumbnail()`
 - **詳細**: URL を含むポスト投稿時、リンクカード生成のため外部通信が発生する:
@@ -216,7 +226,8 @@
 | 4.2 | コンテンツスクリプトのデータを信頼 | LOW | 許容（x.com 信頼境界） |
 | 5.3 | リンクカード用外部 URL fetch | LOW | ユーザー入力起点、head のみ解析 |
 | 6.0 | content.js 変更点 (getVisibleRect / sendMessageWithWakeup / コンテキストガード) | INFO | 問題なし — 詳細は §6.0 参照 |
-| 6.2 | リンクカード外部通信 | LOW-MEDIUM | デフォルト無効、optional_host_permissions |
+| 6.1 | aspectRatio フィールド追加 (canvas 寸法を AT Protocol に送信) | INFO | 問題なし — 詳細は §6.1 参照 |
+| 6.3 | リンクカード外部通信 | LOW-MEDIUM | デフォルト無効、optional_host_permissions |
 
 **CRITICAL または HIGH の所見なし。**
 

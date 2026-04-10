@@ -45,7 +45,7 @@ x-to-bsky/
 - `document.addEventListener("click", handler, true)` で capture phase フック
 - セレクタはデフォルト定義 + `chrome.storage.local.customSelectors` で上書き可能
 - テキスト抽出: `tweetTextarea_${n}` を 0 からインクリメントしてスレッド全体を取得
-- 画像抽出: textarea 近傍の `<img>` を canvas 経由で base64 キャプチャ (同期処理)。`object-fit: cover` の画像は `getVisibleRect()` で表示領域のみをクロップしてキャプチャ
+- 画像抽出: textarea 近傍の `<img>` を canvas 経由で base64 キャプチャ (同期処理)。`object-fit: cover` の画像は `getVisibleRect()` で表示領域のみをクロップしてキャプチャ。キャプチャ結果に `width`/`height` を含め、AT Protocol `aspectRatio` フィールドとして Bluesky に送信
 - フォールバック: `.DraftEditor-root [data-text="true"]`
 - 投稿ボタンに 🦋 バッジを MutationObserver で動的付与
 - トースト通知で Bluesky 投稿結果を表示 (成功: 青, 失敗: 赤, スレッド件数表示)
@@ -70,6 +70,7 @@ x-to-bsky/
 - `splitText(text)`: 300 grapheme 超のテキストを改行・スペースで自動分割
 - `parseFacets(text)`: lookbehind 不使用。`(^|\s)` でバウンダリ判定し offset 補正
 - `extractFirstUrl(text)`: テキスト中の最初の URL を検出 (末尾句読点除去)
+- `calcCoverRect(nw, nh, dw, dh, objectPosition)`: `object-fit: cover` 時の表示領域クロップ計算 (pure function; content.js の `getVisibleRect` と同一アルゴリズム)
 
 ### 認証情報の保存
 
