@@ -170,6 +170,34 @@ function extractFirstUrl(text) {
   return cleanUrlMatch(m[0]);
 }
 
+// ─── Image Utilities ────────────────────────────────────
+
+/**
+ * Calculate the source rectangle for drawImage when object-fit: cover is applied.
+ * Pure function — does not access the DOM.
+ * @param {number} nw - naturalWidth
+ * @param {number} nh - naturalHeight
+ * @param {number} dw - clientWidth (display width)
+ * @param {number} dh - clientHeight (display height)
+ * @param {string} objectPosition - CSS objectPosition value (e.g. "50% 50%")
+ * @returns {{ sx: number, sy: number, sw: number, sh: number }}
+ */
+function calcCoverRect(nw, nh, dw, dh, objectPosition = "50% 50%") {
+  const scale = Math.max(dw / nw, dh / nh);
+  const sw = Math.max(1, Math.round(dw / scale));
+  const sh = Math.max(1, Math.round(dh / scale));
+
+  const parts = objectPosition.split(/\s+/);
+  let px = parseFloat(parts[0]) / 100;
+  let py = parseFloat(parts[1] || parts[0]) / 100;
+  if (isNaN(px)) px = 0.5;
+  if (isNaN(py)) py = 0.5;
+
+  const sx = Math.max(0, Math.round((nw - sw) * px));
+  const sy = Math.max(0, Math.round((nh - sh) * py));
+  return { sx, sy, sw, sh };
+}
+
 // ─── Exports ────────────────────────────────────────────
 
 export {
@@ -183,4 +211,5 @@ export {
   buildByteOffsetMap,
   parseFacets,
   extractFirstUrl,
+  calcCoverRect,
 };

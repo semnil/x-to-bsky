@@ -142,15 +142,17 @@
     if (style.objectFit !== "cover") return { sx: 0, sy: 0, sw: nw, sh: nh };
 
     const scale = Math.max(dw / nw, dh / nh);
-    const sw = Math.round(dw / scale);
-    const sh = Math.round(dh / scale);
+    const sw = Math.max(1, Math.round(dw / scale));
+    const sh = Math.max(1, Math.round(dh / scale));
 
     const parts = style.objectPosition.split(/\s+/);
-    const px = parseFloat(parts[0]) / 100;
-    const py = parseFloat(parts[1] || parts[0]) / 100;
+    let px = parseFloat(parts[0]) / 100;
+    let py = parseFloat(parts[1] || parts[0]) / 100;
+    if (isNaN(px)) px = 0.5;
+    if (isNaN(py)) py = 0.5;
 
-    const sx = Math.round((nw - sw) * px);
-    const sy = Math.round((nh - sh) * py);
+    const sx = Math.max(0, Math.round((nw - sw) * px));
+    const sy = Math.max(0, Math.round((nh - sh) * py));
     return { sx, sy, sw, sh };
   }
 
@@ -162,15 +164,15 @@
       let h = sh;
       if (w > MAX_IMAGE_DIMENSION || h > MAX_IMAGE_DIMENSION) {
         const scale = MAX_IMAGE_DIMENSION / Math.max(w, h);
-        w = Math.round(w * scale);
-        h = Math.round(h * scale);
+        w = Math.max(1, Math.round(w * scale));
+        h = Math.max(1, Math.round(h * scale));
       }
       const canvas = document.createElement("canvas");
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
-      return canvas.toDataURL("image/jpeg", 0.92);
+      return { base64: canvas.toDataURL("image/jpeg", 0.92), width: w, height: h };
     } catch {
       return null;
     }
@@ -193,9 +195,9 @@
       if (img.naturalWidth < MIN_IMAGE_PX || img.naturalHeight < MIN_IMAGE_PX) continue;
       if (img.closest('[data-testid*="avatar" i]')) continue;
 
-      const base64 = captureImageToBase64(img);
-      if (base64) {
-        results.push({ base64, mimeType: "image/jpeg", alt: img.alt || "" });
+      const captured = captureImageToBase64(img);
+      if (captured) {
+        results.push({ base64: captured.base64, width: captured.width, height: captured.height, mimeType: "image/jpeg", alt: img.alt || "" });
       }
       if (results.length >= 4) break;
     }

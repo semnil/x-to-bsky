@@ -391,6 +391,7 @@ async function createPost(text, images = [], parent = null, root = null, sess = 
       images: uploadResults.map((result, i) => ({
         alt: images[i].alt || "",
         image: result.blob,
+        aspectRatio: { width: images[i].width, height: images[i].height },
       })),
     }));
   } else {
