@@ -10,6 +10,7 @@ import {
   buildByteOffsetMap,
   parseFacets,
   extractFirstUrl,
+  calcCoverRect,
 } from "../lib.js";
 
 // Helper: compute UTF-8 byte length of a string
@@ -402,6 +403,109 @@ describe("parseFacets", () => {
         encoded.slice(tag.index.byteStart, tag.index.byteEnd)
       );
       expect(extracted).toBe("#ブルースカイ");
+    });
+  });
+});
+
+// ─── calcCoverRect ──────────────────────────────────────
+
+describe("calcCoverRect", () => {
+  describe("landscape image in landscape container (same ratio)", () => {
+    it("returns full image when aspect ratios match", () => {
+      // nw:nh = dw:dh = 2:1 — no crop needed
+      const r = calcCoverRect(1000, 500, 500, 250, "50% 50%");
+      expect(r.sx).toBe(0);
+      expect(r.sy).toBe(0);
+      expect(r.sw).toBe(1000);
+      expect(r.sh).toBe(500);
+    });
+  });
+
+  describe("portrait image in landscape container (letterbox avoidance)", () => {
+    it("crops height to fill wide container", () => {
+      // nw=480, nh=1080, dw=516, dh=215 — wide container needs horizontal fill
+      const r = calcCoverRect(480, 1080, 516, 215, "50% 50%");
+      expect(r.sw).toBe(480); // full width used
+      expect(r.sh).toBeGreaterThan(0);
+      expect(r.sh).toBeLessThan(1080);
+      expect(r.sx).toBe(0);
+      expect(r.sy).toBeGreaterThan(0); // cropped from top
+    });
+  });
+
+  describe("landscape image in portrait container", () => {
+    it("crops width to fill tall container", () => {
+      // nw=1080, nh=480, dw=215, dh=516
+      const r = calcCoverRect(1080, 480, 215, 516, "50% 50%");
+      expect(r.sh).toBe(480); // full height used
+      expect(r.sw).toBeGreaterThan(0);
+      expect(r.sw).toBeLessThan(1080);
+      expect(r.sy).toBe(0);
+      expect(r.sx).toBeGreaterThan(0); // cropped from left
+    });
+  });
+
+  describe("objectPosition", () => {
+    it("0% 0% anchors to top-left", () => {
+      const r = calcCoverRect(1000, 500, 200, 200, "0% 0%");
+      expect(r.sx).toBe(0);
+      expect(r.sy).toBe(0);
+    });
+
+    it("100% 100% anchors to bottom-right", () => {
+      const { sx, sy, sw, sh } = calcCoverRect(1000, 500, 200, 200, "100% 100%");
+      expect(sx).toBe(1000 - sw);
+      expect(sy).toBe(500 - sh);
+    });
+
+    it("50% 50% centers the crop", () => {
+      const { sx, sy, sw, sh } = calcCoverRect(1000, 500, 200, 200, "50% 50%");
+      expect(sx).toBe(Math.round((1000 - sw) * 0.5));
+      expect(sy).toBe(Math.round((500 - sh) * 0.5));
+    });
+
+    it("non-percentage keyword falls back to 50%", () => {
+      const centered = calcCoverRect(1000, 500, 200, 200, "50% 50%");
+      const keyword = calcCoverRect(1000, 500, 200, 200, "center center");
+      expect(keyword.sx).toBe(centered.sx);
+      expect(keyword.sy).toBe(centered.sy);
+    });
+
+    it("single percentage value applies to both axes", () => {
+      const r = calcCoverRect(1000, 500, 200, 200, "0%");
+      expect(r.sx).toBe(0);
+      expect(r.sy).toBe(0);
+    });
+  });
+
+  describe("AT Protocol constraint: sw and sh must be >= 1", () => {
+    it("clamps sw to 1 for extreme aspect ratio (1xN image in wide container)", () => {
+      // nw=1, nh=4097, dw=800, dh=1 — downscale would give sw < 1
+      const r = calcCoverRect(1, 4097, 800, 1, "50% 50%");
+      expect(r.sw).toBeGreaterThanOrEqual(1);
+      expect(r.sh).toBeGreaterThanOrEqual(1);
+    });
+
+    it("clamps sh to 1 for extreme aspect ratio (Nx1 image in tall container)", () => {
+      const r = calcCoverRect(4097, 1, 1, 800, "50% 50%");
+      expect(r.sw).toBeGreaterThanOrEqual(1);
+      expect(r.sh).toBeGreaterThanOrEqual(1);
+    });
+
+    it("never returns negative sx or sy", () => {
+      const r = calcCoverRect(100, 100, 100, 100, "150% 150%");
+      expect(r.sx).toBeGreaterThanOrEqual(0);
+      expect(r.sy).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe("aspect ratio preservation", () => {
+    it("output sw/sh ratio matches container dw/dh ratio", () => {
+      // container is 2:1, sw/sh should also be approximately 2:1
+      const r = calcCoverRect(1153, 480, 516, 215, "50% 50%");
+      const containerRatio = 516 / 215;
+      const cropRatio = r.sw / r.sh;
+      expect(Math.abs(cropRatio - containerRatio)).toBeLessThan(0.01);
     });
   });
 });
