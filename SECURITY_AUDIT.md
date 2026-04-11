@@ -1,6 +1,6 @@
 # セキュリティ監査レポート — X to Bluesky Crossposter
 
-**日付**: 2026-04-05 (2026-04-09 更新, 2026-04-10 更新)
+**日付**: 2026-04-05 (2026-04-09 更新, 2026-04-10 更新, 2026-04-12 更新)
 **対象**: 全ソースファイル (manifest.json, background.js, lib.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
 **手法**: OWASP Top 10 for Browser Extensions、Chrome MV3 セキュリティモデルレビュー、AT Protocol 認証情報取り扱い分析
 
@@ -90,6 +90,7 @@
   - この拡張のコンテンツスクリプトのみがこの拡張のバックグラウンドにメッセージを送信可能
   - `matches` パターンは x.com/twitter.com に限定
   - メッセージは保存済み認証情報を使用した Bluesky API アクションのみをトリガー
+  - **2026-04-12 更新**: `popup.js` が `chrome.runtime.sendMessage` を廃止し `chrome.storage.local` 直接読み取りに移行。`TOGGLE_CROSSPOST` メッセージと `chrome.tabs.sendMessage` が削除された。background.js に到達するメッセージは `POST_TO_BSKY` と `TEST_LOGIN` のみとなり、攻撃面が縮小した。
 - **推奨**: 多層防御として `sender.id === chrome.runtime.id` の検証を追加。
 
 ### 4.2 コンテンツスクリプトからのスレッドデータを信頼 (LOW)
@@ -160,12 +161,39 @@
   - **プロトタイプ汚染**: `{ ...(condition ? { aspectRatio: { width, height } } : {}) }` のスプレッド演算子は新規オブジェクトを生成する。`{}` リテラルは `Object.prototype` を継承するが、スプレッド元が自前のオブジェクトリテラルであるため `__proto__` や getter の混入は発生しない。AT Protocol ライブラリは使用しておらず、`JSON.stringify` → `fetch` の経路でプロトタイプ汚染が波及することもない。
   - **情報露出**: 画像の幅・高さはメタデータに過ぎず、センシティブ情報を含まない。canvas の描画内容そのもの (base64) は既に送信されており、寸法の追加送信は攻撃面を拡大しない。
 
-### 6.2 投稿時のメモリ内 Base64 画像データ (INFORMATIONAL)
+### 6.2 状態初期化のストレージ直接読み取り移行 (2026-04-12) (INFORMATIONAL)
+
+- **場所**: `content.js` 初期化ブロック、`popup.js` 初期化ブロック
+- **変更内容**:
+  - `content.js`: `sendMessageWithRetry({ type: "GET_STATUS" })` + `chrome.runtime.onMessage` の `TOGGLE_CROSSPOST` ハンドラを削除。`chrome.storage.local.get` で `crosspostEnabled`・`bskyHandle`・`includeQuoteUrl`・`customSelectors` を一括取得する方式に変更。`chrome.storage.onChanged` リスナーで `crosspostEnabled`・`bskyHandle`・`customSelectors` の変更も追跡するよう拡張。
+  - `popup.js`: `chrome.runtime.sendMessage({ type: "GET_STATUS" })` を削除。`chrome.storage.local.get` で直接読み取り。`chrome.tabs.sendMessage` による `TOGGLE_CROSSPOST` ブロードキャストを削除。
+
+#### `storage.onChanged` の `newValue` が `undefined` になる場合
+
+- **詳細**: `chrome.storage.local.remove()` でキーを削除すると `onChanged` の変更エントリに `newValue` が存在しない（`undefined`）。
+- **評価**:
+  - `changes.crosspostEnabled.newValue !== false` → `undefined !== false` → `true`。キー削除時は enabled がデフォルト (`true`) に戻る。意図した挙動として許容。
+  - `!!changes.bskyHandle.newValue` → `false`。キー削除で configured が `false` になる。正しい挙動。
+  - `!!changes.includeQuoteUrl.newValue` → `false`。正しい挙動。
+  - `changes.customSelectors.newValue ? ... : { ...DEFAULT_SELECTORS }` → falsy 分岐でデフォルトにリセット。正しい挙動。
+  - **総合評価**: 全フィールドで `undefined` を安全に処理する実装になっている。
+
+#### `chrome.storage.local.get` 失敗時のデフォルト
+
+- **詳細**: Chrome エラー時はコールバックが空オブジェクト `{}` を受け取る。
+- **評価**: `enabled = true`（安全なデフォルト）、`configured = false`（認証情報未設定として扱う）、`includeQuoteUrl = false`、`selectors = DEFAULT_SELECTORS`。get 失敗時に未設定状態で動作するため、誤った認証情報で投稿しようとすることはない。
+
+#### レースコンディション: `storage.local.get` コールバック vs `storage.onChanged`
+
+- **詳細**: `storage.local.get` コールバックが返る前に `storage.onChanged` が発火した場合（popup 操作と同時など）、後続の `get` コールバックが `onChanged` で設定した値を古い値で上書きする可能性がある。
+- **評価**: Chrome のストレージ API は単一スレッドのレンダラプロセス内で動作し、JavaScript イベントループのタスクキューに順次配置される。`storage.local.get` 送信後に `set` が実行された場合、`get` のコールバックが受け取る値は `set` 後の最新値を返すか、または `onChanged` が先に発火してから `get` コールバックが発火する。いずれの場合も最終状態は同一値を二重設定するだけであり、stale な旧値が上書きされるシナリオは Chrome の内部実装上発生しない。**S3 (理論的) — 実用上の問題なし。**
+
+### 6.4 投稿時のメモリ内 Base64 画像データ (INFORMATIONAL)
 
 - **詳細**: 画像データ全体 (base64) がコンテンツスクリプトと Service worker 間の Chrome メッセージチャネルを通過する。メモリ内のみで永続化されない。
 - **評価**: 許容範囲。画像はユーザー自身のコンポーズエリアから取得される。
 
-### 6.3 リンクカード外部通信 (LOW-MEDIUM)
+### 6.5 リンクカード外部通信 (LOW-MEDIUM)
 
 - **場所**: `background.js:fetchOgpMetadata()`, `background.js:uploadThumbnail()`
 - **詳細**: URL を含むポスト投稿時、リンクカード生成のため外部通信が発生する:
@@ -212,7 +240,7 @@
 - **オプション権限**: `optional_host_permissions` + `chrome.permissions.request()` で設定画面のトグル操作時に権限を付与。無効化時に `chrome.permissions.remove()` で自動解除。
 - **スレッド投稿のセッション再利用**: `postThread()` で一度取得した session を全ポストに渡す。スレッド投稿中の不要な再認証・storage 読み取りを排除。
 - **設定マイグレーション**: `chrome.runtime.onInstalled` で旧設定キーを自動マイグレーション。マイグレーション後に旧キーを削除。
-- **Service worker 起動対策**: MV3 の service worker 非アクティブ問題に対し、初期状態取得 (`GET_STATUS`) はリトライ付きで送信。投稿 (`POST_TO_BSKY`) はリトライせず、事前に `GET_STATUS` で service worker を起動してから送信する wakeup 方式を採用。重複投稿を防止。
+- **Service worker 起動対策 (2026-04-12 更新)**: MV3 の service worker 非アクティブ問題への対応を刷新した。`popup.js` と `content.js` の初期状態取得を `chrome.runtime.sendMessage (GET_STATUS)` から `chrome.storage.local.get` への直接読み取りに変更。service worker の起動を必要とせず、コールバック遅延やリトライ競合が発生しない。投稿 (`POST_TO_BSKY`) は従来どおり `sendMessageWithWakeup()` を使用し、事前 ping で service worker を起動してから送信する wakeup 方式を維持。`sendMessageWithRetry` (リトライ付き `GET_STATUS` 送信) は削除済み。
 
 ---
 
@@ -227,7 +255,8 @@
 | 5.3 | リンクカード用外部 URL fetch | LOW | ユーザー入力起点、head のみ解析 |
 | 6.0 | content.js 変更点 (getVisibleRect / sendMessageWithWakeup / コンテキストガード) | INFO | 問題なし — 詳細は §6.0 参照 |
 | 6.1 | aspectRatio フィールド追加 (canvas 寸法を AT Protocol に送信) | INFO | 問題なし — 詳細は §6.1 参照 |
-| 6.3 | リンクカード外部通信 | LOW-MEDIUM | デフォルト無効、optional_host_permissions |
+| 6.2 | ストレージ直接読み取り移行 (newValue=undefined / get失敗 / レース) | INFO | 問題なし — 詳細は §6.2 参照 |
+| 6.5 | リンクカード外部通信 | LOW-MEDIUM | デフォルト無効、optional_host_permissions |
 
 **CRITICAL または HIGH の所見なし。**
 
