@@ -15,32 +15,34 @@
   let includeQuoteUrl = false;
   let selectors = { ...DEFAULT_SELECTORS };
 
-  // Load custom selectors and behavior settings from storage
-  chrome.storage.local.get(["customSelectors", "includeQuoteUrl"], (data) => {
-    if (data.customSelectors) {
-      selectors = { ...DEFAULT_SELECTORS, ...data.customSelectors };
+  // Load all settings from storage in a single call
+  chrome.storage.local.get(
+    ["customSelectors", "includeQuoteUrl", "bskyHandle", "crosspostEnabled"],
+    (data) => {
+      if (data.customSelectors) {
+        selectors = { ...DEFAULT_SELECTORS, ...data.customSelectors };
+      }
+      includeQuoteUrl = !!data.includeQuoteUrl;
+      configured = !!data.bskyHandle;
+      enabled = data.crosspostEnabled !== false;
     }
-    includeQuoteUrl = !!data.includeQuoteUrl;
-  });
+  );
 
-  // Listen for setting changes (e.g. user toggles while x.com is open)
+  // Keep state in sync when storage changes from any context (popup, options, etc.)
   chrome.storage.onChanged.addListener((changes) => {
+    if (changes.crosspostEnabled) {
+      enabled = changes.crosspostEnabled.newValue !== false;
+    }
+    if (changes.bskyHandle) {
+      configured = !!changes.bskyHandle.newValue;
+    }
     if (changes.includeQuoteUrl) {
       includeQuoteUrl = !!changes.includeQuoteUrl.newValue;
     }
-  });
-
-  // Fetch initial status (service worker may not be ready yet)
-  sendMessageWithRetry({ type: "GET_STATUS" }, (res) => {
-    if (res) {
-      enabled = res.enabled;
-      configured = res.configured;
-    }
-  });
-
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === "TOGGLE_CROSSPOST") {
-      enabled = msg.enabled;
+    if (changes.customSelectors) {
+      selectors = changes.customSelectors.newValue
+        ? { ...DEFAULT_SELECTORS, ...changes.customSelectors.newValue }
+        : { ...DEFAULT_SELECTORS };
     }
   });
 
@@ -279,22 +281,6 @@
   }
 
   // ─── Message Helpers ─────────────────────────────────────
-
-  /**
-   * Send a read-only message to the background service worker with retry.
-   * MV3 service workers may be inactive; the first sendMessage wakes them,
-   * but the response can be lost. Retry transparently on failure.
-   * Only safe for idempotent (read-only) messages.
-   */
-  function sendMessageWithRetry(msg, callback, retries = 2) {
-    chrome.runtime.sendMessage(msg, (res) => {
-      if (chrome.runtime.lastError && retries > 0) {
-        setTimeout(() => sendMessageWithRetry(msg, callback, retries - 1), 500);
-        return;
-      }
-      callback(res);
-    });
-  }
 
   /**
    * Wake the service worker with a lightweight ping, then send the real message.

@@ -6,31 +6,21 @@ const handleEl = document.getElementById("handle");
 const notConfigured = document.getElementById("not-configured");
 const settingsLink = document.getElementById("settings-link");
 
-// Load state
-chrome.runtime.sendMessage({ type: "GET_STATUS" }, (res) => {
-  if (!res) return;
+// Load state directly from storage (avoids service worker wake-up issues)
+chrome.storage.local.get(["bskyHandle", "crosspostEnabled"], (data) => {
+  toggle.checked = data.crosspostEnabled !== false;
 
-  toggle.checked = res.enabled;
-
-  if (res.configured) {
+  if (data.bskyHandle) {
     statusEl.style.display = "block";
-    handleEl.textContent = `@${res.handle}`;
+    handleEl.textContent = `@${data.bskyHandle}`;
   } else {
     notConfigured.style.display = "block";
   }
 });
 
-// Toggle handler
+// Toggle handler — storage.onChanged in content.js picks up the change automatically
 toggle.addEventListener("change", () => {
-  const enabled = toggle.checked;
-  chrome.storage.local.set({ crosspostEnabled: enabled });
-
-  // Notify all x.com tabs
-  chrome.tabs.query({ url: ["*://x.com/*", "*://twitter.com/*"] }, (tabs) => {
-    for (const tab of tabs) {
-      chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_CROSSPOST", enabled });
-    }
-  });
+  chrome.storage.local.set({ crosspostEnabled: toggle.checked });
 });
 
 // Settings link
