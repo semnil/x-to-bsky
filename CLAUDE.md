@@ -11,7 +11,7 @@ X (Twitter) の投稿ボタンをフックし、同じテキストを Bluesky �
 x-to-bsky/
 ├── manifest.json        # Manifest V3 設定
 ├── background.js        # Service worker: Bluesky API (認証・投稿・画像・スレッド)
-├── lib.js               # 純粋関数 (grapheme処理・テキスト分割・facet解析・URL検出)
+├── lib.js               # 純粋関数 (grapheme処理・テキスト分割・facet解析・URL検出・URL省略)
 ├── shared.js            # content.js / options.js 共有定数 (DEFAULT_SELECTORS)
 ├── content.js           # x.com 上のコンテンツスクリプト (投稿・画像・スレッドフック)
 ├── content.css          # トースト通知・🦋バッジのスタイル
@@ -62,13 +62,15 @@ x-to-bsky/
 - `uploadThumbnail(url, jwt)`: 画像 URL をダウンロードして Bluesky にアップロード
 - `buildLinkEmbed(url, jwt)`: リンクカード (`app.bsky.embed.external`) 構築。OGP メタデータからタイトル・説明・サムネイルを取得
 - `createPost(text, images, parent, root)`: 画像 embed / リンクカード / reply chain 対応
-- `postThread(thread)`: 自動分割 + reply chain によるスレッド投稿
+- `postThread(thread)`: URL 省略 + 自動分割 + reply chain によるスレッド投稿
 - メッセージハンドラ: `POST_TO_BSKY`, `TEST_LOGIN`, `GET_STATUS`
 
 ### lib.js
 
 - `segmentGraphemes(text)` / `countGraphemes(text)`: `Intl.Segmenter` による正確な grapheme 単位処理
-- `splitText(text)`: 300 grapheme 超のテキストを改行・スペースで自動分割
+- `splitText(text)`: 300 grapheme 超のテキストを改行・スペースで自動分割。URL 内部でのハードカットを防止
+- `shortenUrlsInText(text)`: 300 grapheme 超のテキストに含まれる URL を省略表示に変換。`https://` 除去 + パス切り詰め (`...`) で公式 Bluesky アプリと同等の表示。`{ text, urlEntries }` を返す
+- `buildShortenedUrlFacets(text, urlEntries)`: 省略表示 URL の facet を生成。`uri` に原文 URL を保持
 - `parseFacets(text)`: lookbehind 不使用。`(^|\s)` でバウンダリ判定し offset 補正
 - `extractFirstUrl(text)`: テキスト中の最初の URL を検出 (末尾句読点除去)
 - `calcCoverRect(nw, nh, dw, dh, objectPosition)`: `object-fit: cover` 時の表示領域クロップ計算 (pure function; content.js の `getVisibleRect` と同一アルゴリズム)
@@ -90,6 +92,7 @@ x-to-bsky/
 
 - **画像キャプチャ**: canvas 経由のため、cross-origin 画像 (pbs.twimg.com 等) は tainted canvas で取得失敗する場合がある。blob: URL (ローカル添付) は問題なし
 - **動画非対応**: Bluesky の動画投稿 API が安定したら対応を検討
+- **長い URL**: 300 grapheme を超える percent-encoded URL は公式 Bluesky アプリと同様に省略表示 (`https://` 除去 + パス切り詰め `...`) に変換。facet URI に原文 URL を保持しクリック可能
 - **スレッド**: X の「+」ボタンで複数ポストを一度に作成した場合のみ Bluesky でも reply chain として投稿される。既存ポストへの返信によるスレッド追加は、対応する Bluesky 側の親ポストを特定できないため未対応
 - **引用 RT**: デフォルトではコメントテキストのみ投稿される。設定画面の「投稿オプション」で有効化すると、引用元ポストの X リンクをテキスト末尾に追加可能
 - **リンクカード**: URL を含むポストで画像がない場合、OGP メタデータからサムネイル付きリンクカードを自動生成。OGP 非対応サイトはタイトルなしカードにフォールバック。デフォルト無効、設定画面で有効化時にウェブアクセス権限を一括付与 (無効化で自動解除)。未許可ドメインはカードなしで投稿

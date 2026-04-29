@@ -1,6 +1,6 @@
 # セキュリティ監査レポート — X to Bluesky Crossposter
 
-**日付**: 2026-04-05 (2026-04-09 更新, 2026-04-10 更新, 2026-04-12 更新)
+**日付**: 2026-04-05 (2026-04-09 更新, 2026-04-10 更新, 2026-04-12 更新, 2026-04-29 更新)
 **対象**: 全ソースファイル (manifest.json, background.js, lib.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
 **手法**: OWASP Top 10 for Browser Extensions、Chrome MV3 セキュリティモデルレビュー、AT Protocol 認証情報取り扱い分析
 
@@ -188,6 +188,15 @@
 - **詳細**: `storage.local.get` コールバックが返る前に `storage.onChanged` が発火した場合（popup 操作と同時など）、後続の `get` コールバックが `onChanged` で設定した値を古い値で上書きする可能性がある。
 - **評価**: Chrome のストレージ API は単一スレッドのレンダラプロセス内で動作し、JavaScript イベントループのタスクキューに順次配置される。`storage.local.get` 送信後に `set` が実行された場合、`get` のコールバックが受け取る値は `set` 後の最新値を返すか、または `onChanged` が先に発火してから `get` コールバックが発火する。いずれの場合も最終状態は同一値を二重設定するだけであり、stale な旧値が上書きされるシナリオは Chrome の内部実装上発生しない。**S3 (理論的) — 実用上の問題なし。**
 
+### 6.3 URL 省略表示と facet URI 分離 (2026-04-29) (INFORMATIONAL)
+
+- **場所**: `lib.js:shortenUrlsInText()`, `lib.js:buildShortenedUrlFacets()`, `background.js:createPost()`
+- **変更内容**: 300 grapheme を超えるテキストに含まれる URL を省略表示 (`https://` 除去 + パス切り詰め + `...`) に変換。テキストには省略表示、facet の `uri` フィールドには原文 percent-encoded URL を格納する分離方式に変更。
+- **評価**:
+  - **facet URI の信頼性**: `urlEntries[].original` はコンテンツスクリプトが X の DOM から抽出した URL そのもの。`shortenUrlsInText` は `URL_RE_GLOBAL` で検出した URL を `cleanUrlMatch` で末尾句読点除去した値を保持するのみで、URL の改変は行わない。攻撃者がページスクリプトから `original` を差し替える経路はない (IIFE スコープ + content script 分離)。
+  - **byte offset の正確性**: `buildShortenedUrlFacets` は `buildByteOffsetMap` で省略表示テキストの UTF-8 byte offset を計算。`charStart`/`charEnd` は `shortenUrlsInText` 内で文字列結合時に正確に追跡される。オフセットのずれによる不正なテキスト範囲指定は発生しない。
+  - **splitText との連携**: URL 省略後に `splitText` で分割された場合、各チャンクの `urlEntries` は `chunk.indexOf(entry.display)` で再探索される。`display` が省略テキスト内で一意であることが前提だが、同一 URL が複数回出現するケースでも `indexOf` の順序探索により正しく対応する。
+
 ### 6.4 投稿時のメモリ内 Base64 画像データ (INFORMATIONAL)
 
 - **詳細**: 画像データ全体 (base64) がコンテンツスクリプトと Service worker 間の Chrome メッセージチャネルを通過する。メモリ内のみで永続化されない。
@@ -256,6 +265,7 @@
 | 6.0 | content.js 変更点 (getVisibleRect / sendMessageWithWakeup / コンテキストガード) | INFO | 問題なし — 詳細は §6.0 参照 |
 | 6.1 | aspectRatio フィールド追加 (canvas 寸法を AT Protocol に送信) | INFO | 問題なし — 詳細は §6.1 参照 |
 | 6.2 | ストレージ直接読み取り移行 (newValue=undefined / get失敗 / レース) | INFO | 問題なし — 詳細は §6.2 参照 |
+| 6.3 | URL 省略表示と facet URI 分離 (text/facet の値が異なる) | INFO | 問題なし — 詳細は §6.3 参照 |
 | 6.5 | リンクカード外部通信 | LOW-MEDIUM | デフォルト無効、optional_host_permissions |
 
 **CRITICAL または HIGH の所見なし。**
