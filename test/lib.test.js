@@ -7,6 +7,8 @@ import {
   segmentGraphemes,
   countGraphemes,
   splitText,
+  shortenUrlsInText,
+  buildShortenedUrlFacets,
   buildByteOffsetMap,
   parseFacets,
   extractFirstUrl,
@@ -132,6 +134,113 @@ describe("splitText", () => {
 
   it("returns original for whitespace-only string (short text, no split)", () => {
     expect(splitText("   ")).toEqual(["   "]);
+  });
+
+  it("does not split inside a URL on hard cut", () => {
+    const url = "https://example.com/" + "a".repeat(280);
+    const text = "See " + url;
+    const chunks = splitText(text);
+    expect(chunks.length).toBe(2);
+    expect(chunks[0]).toBe("See");
+    expect(chunks[1]).toBe(url);
+  });
+});
+
+// ─── shortenUrlsInText ────────────────────────────────
+
+describe("shortenUrlsInText", () => {
+  it("does not shorten when text fits within MAX_GRAPHEMES", () => {
+    const text = "See https://example.com/path end";
+    const { text: result, urlEntries } = shortenUrlsInText(text);
+    expect(result).toBe(text);
+    expect(urlEntries).toHaveLength(0);
+  });
+
+  it("shortens long percent-encoded URL to fit", () => {
+    const encoded = "https://music.apple.com/jp/song/%E5%9C%B0%E7%90%83%E7%8C%AB-%E3%82%AD%E3%83%83%E3%82%BA%E3%82%BD%E3%83%B3%E3%82%B0%E3%82%AB%E3%83%90%E3%83%BC-nhk%E6%95%99%E8%82%B2%E3%83%86%E3%83%AC%E3%83%93-e%E3%83%86%E3%83%AC-%E3%81%8A%E3%81%8B%E3%81%82%E3%81%95%E3%82%93%E3%81%A8%E3%81%84%E3%81%A3%E3%81%97%E3%82%87-%E3%82%88%E3%82%8A/1621578208";
+    expect(countGraphemes(encoded)).toBeGreaterThan(MAX_GRAPHEMES);
+    const { text: result, urlEntries } = shortenUrlsInText(encoded);
+    expect(countGraphemes(result)).toBeLessThanOrEqual(MAX_GRAPHEMES);
+    expect(result).not.toContain("https://");
+    expect(result).toContain("...");
+    expect(urlEntries).toHaveLength(1);
+    expect(urlEntries[0].original).toBe(encoded);
+  });
+
+  it("strips https:// protocol from shortened URLs", () => {
+    const url = "https://example.com/" + "a".repeat(290);
+    const { text: result } = shortenUrlsInText(url);
+    expect(result.startsWith("example.com/")).toBe(true);
+  });
+
+  it("preserves surrounding text when shortening", () => {
+    const url = "https://example.com/" + "a".repeat(290);
+    const text = "Check " + url + " here";
+    const { text: result } = shortenUrlsInText(text);
+    expect(result.startsWith("Check ")).toBe(true);
+    expect(result.endsWith(" here")).toBe(true);
+    expect(result).toContain("...");
+  });
+
+  it("tracks correct character positions for facet creation", () => {
+    const url = "https://example.com/" + "a".repeat(290);
+    const { text: result, urlEntries } = shortenUrlsInText(url);
+    const entry = urlEntries[0];
+    expect(result.slice(entry.charStart, entry.charEnd)).toBe(entry.display);
+  });
+
+  it("handles multiple URLs in text exceeding limit", () => {
+    const url1 = "https://example.com/" + "a".repeat(150);
+    const url2 = "https://example.com/" + "b".repeat(150);
+    const text = url1 + " " + url2;
+    const { urlEntries } = shortenUrlsInText(text);
+    expect(urlEntries).toHaveLength(2);
+    expect(urlEntries[0].original).toBe(url1);
+    expect(urlEntries[1].original).toBe(url2);
+  });
+});
+
+// ─── buildShortenedUrlFacets ──────────────────────────
+
+describe("buildShortenedUrlFacets", () => {
+  it("returns empty array for no entries", () => {
+    expect(buildShortenedUrlFacets("hello", [])).toEqual([]);
+  });
+
+  it("creates facets with original URL as URI", () => {
+    const originalUrl = "https://example.com/" + "x".repeat(290);
+    const { text, urlEntries } = shortenUrlsInText(originalUrl);
+    const facets = buildShortenedUrlFacets(text, urlEntries);
+    expect(facets).toHaveLength(1);
+    expect(facets[0].features[0].$type).toBe(FACET_LINK);
+    expect(facets[0].features[0].uri).toBe(originalUrl);
+  });
+
+  it("computes correct byte offsets for shortened display", () => {
+    const originalUrl = "https://example.com/" + "x".repeat(290);
+    const { text, urlEntries } = shortenUrlsInText(originalUrl);
+    const facets = buildShortenedUrlFacets(text, urlEntries);
+    const encoded = new TextEncoder().encode(text);
+    const extracted = new TextDecoder().decode(
+      encoded.slice(facets[0].index.byteStart, facets[0].index.byteEnd)
+    );
+    expect(extracted).toBe(urlEntries[0].display);
+  });
+
+  it("matches official Bluesky app format for Apple Music URL", () => {
+    const url = "https://music.apple.com/jp/song/%E5%9C%B0%E7%90%83%E7%8C%AB-%E3%82%AD%E3%83%83%E3%82%BA%E3%82%BD%E3%83%B3%E3%82%B0%E3%82%AB%E3%83%90%E3%83%BC-nhk%E6%95%99%E8%82%B2%E3%83%86%E3%83%AC%E3%83%93-e%E3%83%86%E3%83%AC-%E3%81%8A%E3%81%8B%E3%81%82%E3%81%95%E3%82%93%E3%81%A8%E3%81%84%E3%81%A3%E3%81%97%E3%82%87-%E3%82%88%E3%82%8A/1621578208";
+    const { text, urlEntries } = shortenUrlsInText(url);
+    const facets = buildShortenedUrlFacets(text, urlEntries);
+
+    // text: protocol stripped + truncated with "..."
+    expect(text).not.toContain("https://");
+    expect(text).toContain("...");
+    expect(text.startsWith("music.apple.com/")).toBe(true);
+    // facet URI: original percent-encoded URL preserved
+    expect(facets[0].features[0].uri).toBe(url);
+    // byte offsets cover the display text
+    expect(facets[0].index.byteStart).toBe(0);
+    expect(facets[0].index.byteEnd).toBe(new TextEncoder().encode(text).length);
   });
 });
 

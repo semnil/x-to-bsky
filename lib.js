@@ -27,12 +27,48 @@ function countGraphemes(text) {
 }
 
 /**
+ * Map character (UTF-16 code unit) indices to grapheme indices for URL range detection.
+ */
+function buildCharToGraphemeMap(text, graphemes) {
+  const map = [];
+  let ci = 0;
+  for (let gi = 0; gi < graphemes.length; gi++) {
+    for (let j = 0; j < graphemes[gi].length; j++) {
+      map[ci++] = gi;
+    }
+  }
+  map[ci] = graphemes.length;
+  return map;
+}
+
+/**
+ * Find URL positions in text as grapheme index ranges.
+ */
+function findUrlGraphemeRanges(text, graphemes) {
+  const charToGrapheme = buildCharToGraphemeMap(text, graphemes);
+  const ranges = [];
+  URL_RE_GLOBAL.lastIndex = 0;
+  let m;
+  while ((m = URL_RE_GLOBAL.exec(text)) !== null) {
+    const url = cleanUrlMatch(m[0]);
+    ranges.push({
+      start: charToGrapheme[m.index],
+      end: charToGrapheme[m.index + url.length],
+    });
+  }
+  return ranges;
+}
+
+/**
  * Split text into chunks fitting within MAX_GRAPHEMES.
  * Prefers splitting at newlines, then spaces, falling back to hard cut.
+ * Never breaks inside a URL.
  */
 function splitText(text) {
   const graphemes = segmentGraphemes(text);
   if (graphemes.length <= MAX_GRAPHEMES) return [text];
+
+  const urlRanges = findUrlGraphemeRanges(text, graphemes);
 
   const chunks = [];
   let start = 0;
@@ -57,7 +93,15 @@ function splitText(text) {
       if (graphemes[i] === "\n") { breakIdx = i; break; }
       if (graphemes[i] === " " && breakIdx < 0) breakIdx = i;
     }
-    if (breakIdx > start) end = breakIdx + 1;
+
+    if (breakIdx > start) {
+      end = breakIdx + 1;
+    } else {
+      const urlRange = urlRanges.find(r => end > r.start && end < r.end);
+      if (urlRange && urlRange.start > start) {
+        end = urlRange.start;
+      }
+    }
 
     chunks.push(graphemes.slice(start, end).join("").trim());
     start = end;
@@ -157,6 +201,66 @@ function parseFacets(text) {
   return facets;
 }
 
+// ─── URL Shortening ──────────────────────────────────
+
+const URL_DISPLAY_LIMIT = 28;
+
+/**
+ * Shorten a URL for display: strip protocol, truncate with "..." if needed.
+ */
+function shortenUrlDisplay(url) {
+  const display = url.replace(/^https?:\/\//, "");
+  const graphemes = segmentGraphemes(display);
+  if (graphemes.length <= URL_DISPLAY_LIMIT) return display;
+  return graphemes.slice(0, URL_DISPLAY_LIMIT).join("") + "...";
+}
+
+/**
+ * Shorten URLs in text when total graphemes exceed MAX_GRAPHEMES.
+ * Returns { text, urlEntries } where urlEntries tracks original URLs
+ * and their display positions for facet creation.
+ */
+function shortenUrlsInText(text) {
+  if (countGraphemes(text) <= MAX_GRAPHEMES) return { text, urlEntries: [] };
+
+  const urlEntries = [];
+  let result = "";
+  let lastIndex = 0;
+
+  URL_RE_GLOBAL.lastIndex = 0;
+  let m;
+  while ((m = URL_RE_GLOBAL.exec(text)) !== null) {
+    const url = cleanUrlMatch(m[0]);
+    const trailing = m[0].slice(url.length);
+    const display = shortenUrlDisplay(url);
+
+    result += text.slice(lastIndex, m.index);
+    const charStart = result.length;
+    result += display;
+    const charEnd = result.length;
+    result += trailing;
+
+    urlEntries.push({ charStart, charEnd, original: url, display });
+    lastIndex = m.index + m[0].length;
+  }
+  result += text.slice(lastIndex);
+
+  return { text: result, urlEntries };
+}
+
+/**
+ * Build link facets for shortened URLs using tracked character positions.
+ * The facet URI stores the original (full) URL.
+ */
+function buildShortenedUrlFacets(text, urlEntries) {
+  if (urlEntries.length === 0) return [];
+  const byteMap = buildByteOffsetMap(text);
+  return urlEntries.map(({ charStart, charEnd, original }) => ({
+    index: { byteStart: byteMap[charStart], byteEnd: byteMap[charEnd] },
+    features: [{ $type: FACET_LINK, uri: original }],
+  }));
+}
+
 // ─── URL Detection ─────────────────────────────────────
 
 /**
@@ -208,6 +312,8 @@ export {
   segmentGraphemes,
   countGraphemes,
   splitText,
+  shortenUrlsInText,
+  buildShortenedUrlFacets,
   buildByteOffsetMap,
   parseFacets,
   extractFirstUrl,

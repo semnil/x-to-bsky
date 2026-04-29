@@ -2,6 +2,8 @@
 
 import {
   splitText,
+  shortenUrlsInText,
+  buildShortenedUrlFacets,
   parseFacets,
   FACET_MENTION,
   extractFirstUrl,
@@ -370,14 +372,17 @@ async function buildLinkEmbed(url, accessJwt, includeThumbnail = true) {
  * @param {object|null} parent - { uri, cid } of parent post (for reply chain)
  * @param {object|null} root - { uri, cid } of root post (for reply chain)
  * @param {object|null} sess - pre-fetched session (avoids redundant auth in threads)
+ * @param {Array} urlEntries - shortened URL entries from shortenUrlsInText
  */
-async function createPost(text, images = [], parent = null, root = null, sess = null) {
+async function createPost(text, images = [], parent = null, root = null, sess = null, urlEntries = []) {
   if (!sess) sess = await createSession();
 
   // Start independent async work in parallel: facet resolution + embed construction
   const rawFacets = parseFacets(text);
-  const facetsPromise = rawFacets.length > 0
-    ? resolveMentionFacets(rawFacets)
+  const urlFacets = buildShortenedUrlFacets(text, urlEntries);
+  const allRawFacets = [...rawFacets, ...urlFacets];
+  const facetsPromise = allRawFacets.length > 0
+    ? resolveMentionFacets(allRawFacets)
     : Promise.resolve([]);
 
   let embedPromise = Promise.resolve(null);
@@ -395,7 +400,7 @@ async function createPost(text, images = [], parent = null, root = null, sess = 
       })),
     }));
   } else {
-    const linkUrl = extractFirstUrl(text);
+    const linkUrl = urlEntries.length > 0 ? urlEntries[0].original : extractFirstUrl(text);
     if (linkUrl) {
       embedPromise = chrome.storage.local.get(["includeLinkCard", "linkCardThumbnail"]).then(
         ({ includeLinkCard, linkCardThumbnail }) =>
@@ -457,14 +462,26 @@ async function createPost(text, images = [], parent = null, root = null, sess = 
 async function postThread(thread) {
   const sess = await createSession();
 
-  // Expand: split any long posts into multiple chunks
+  // Expand: shorten long URLs, then split any remaining long posts
   const expanded = [];
   for (const post of thread) {
-    const chunks = splitText(post.text);
+    const { text, urlEntries } = shortenUrlsInText(post.text);
+    const chunks = splitText(text);
     chunks.forEach((chunk, i) => {
+      let chunkUrlEntries = urlEntries;
+      if (chunks.length > 1) {
+        chunkUrlEntries = [];
+        for (const entry of urlEntries) {
+          const pos = chunk.indexOf(entry.display);
+          if (pos >= 0) {
+            chunkUrlEntries.push({ ...entry, charStart: pos, charEnd: pos + entry.display.length });
+          }
+        }
+      }
       expanded.push({
         text: chunk,
         images: i === 0 ? (post.images || []) : [],
+        urlEntries: chunkUrlEntries,
       });
     });
   }
@@ -475,7 +492,7 @@ async function postThread(thread) {
   let parent = null;
 
   for (const post of expanded) {
-    const result = await createPost(post.text, post.images, parent, root, sess);
+    const result = await createPost(post.text, post.images, parent, root, sess, post.urlEntries);
     results.push(result);
     if (!root) root = result;
     parent = result;
