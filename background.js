@@ -11,6 +11,8 @@ import {
 
 const BSKY_SERVICE = "https://bsky.social";
 const MAX_IMAGES = 4;
+const MAX_BLOB_BYTES = 1_000_000; // Bluesky lexicon limit for embed image/thumb blobs
+const THUMB_MAX_DIMENSION = 1000;
 
 // Session cache (lives as long as the service worker)
 let session = null;
@@ -164,16 +166,59 @@ async function uploadImage(base64Data, mimeType, accessJwt) {
 }
 
 /**
- * Download an image URL and upload it to Bluesky.
+ * Re-encode an image into a JPEG that fits within MAX_BLOB_BYTES.
+ * Uses OffscreenCanvas (available in MV3 service workers).
+ * Returns Uint8Array bytes, or null if it cannot be shrunk far enough.
+ */
+async function downscaleToJpeg(buf, contentType) {
+  try {
+    const blob = new Blob([buf], { type: contentType });
+    const bitmap = await createImageBitmap(blob);
+    let w = bitmap.width;
+    let h = bitmap.height;
+    if (w > THUMB_MAX_DIMENSION || h > THUMB_MAX_DIMENSION) {
+      const scale = THUMB_MAX_DIMENSION / Math.max(w, h);
+      w = Math.max(1, Math.round(w * scale));
+      h = Math.max(1, Math.round(h * scale));
+    }
+    const canvas = new OffscreenCanvas(w, h);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+
+    // Step quality down until the encoded blob fits, or give up.
+    for (const quality of [0.85, 0.7, 0.55, 0.4]) {
+      const out = await canvas.convertToBlob({ type: "image/jpeg", quality });
+      if (out.size <= MAX_BLOB_BYTES) {
+        return new Uint8Array(await out.arrayBuffer());
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Download an image URL and upload it to Bluesky as a thumbnail blob.
+ * If the source exceeds the lexicon limit, re-encode it to a JPEG that fits.
  * Returns the blob reference or null on failure.
  */
 async function uploadThumbnail(imageUrl, accessJwt) {
   try {
     const imgRes = await fetch(imageUrl);
     if (!imgRes.ok) return null;
-    const buf = await imgRes.arrayBuffer();
-    const contentType = imgRes.headers.get("content-type") || "image/jpeg";
-    const data = await uploadBlob(new Uint8Array(buf), contentType, accessJwt);
+    let bytes = new Uint8Array(await imgRes.arrayBuffer());
+    let contentType = imgRes.headers.get("content-type") || "image/jpeg";
+
+    if (bytes.byteLength > MAX_BLOB_BYTES) {
+      const shrunk = await downscaleToJpeg(bytes, contentType);
+      if (!shrunk) return null;
+      bytes = shrunk;
+      contentType = "image/jpeg";
+    }
+
+    const data = await uploadBlob(bytes, contentType, accessJwt);
     return data.blob;
   } catch {
     return null;
