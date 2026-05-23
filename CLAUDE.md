@@ -59,7 +59,8 @@ x-to-bsky/
 - `resolveMentionFacets()`: メンション handle → DID 解決
 - `uploadImage(base64, mimeType)`: `com.atproto.repo.uploadBlob` で画像アップロード
 - `fetchOgpMetadata(url)`: 任意 URL から OGP メタデータ取得 (head のみストリーム読み取り)
-- `uploadThumbnail(url, jwt)`: 画像 URL をダウンロードして Bluesky にアップロード
+- `uploadThumbnail(url, jwt)`: 画像 URL をダウンロードして Bluesky にアップロード。1MB 超の画像は `downscaleToJpeg` で縮小してから送信 (Bluesky lexicon の `embed.external.thumb` 上限が 1,000,000 バイトのため)
+- `downscaleToJpeg(bytes, contentType)`: `createImageBitmap` + `OffscreenCanvas` + `convertToBlob` で 1000px 以下にリサイズ + JPEG 再エンコード (quality 0.85→0.4 と段階的に低下)。Service Worker でも動作。1MB に収まらない場合は null を返しサムネイルなしでフォールバック
 - `buildLinkEmbed(url, jwt)`: リンクカード (`app.bsky.embed.external`) 構築。OGP メタデータからタイトル・説明・サムネイルを取得
 - `createPost(text, images, parent, root)`: 画像 embed / リンクカード / reply chain 対応
 - `postThread(thread)`: URL 省略 + 自動分割 + reply chain によるスレッド投稿
@@ -118,7 +119,7 @@ x-to-bsky/
 ```bash
 chmod +x build.sh
 ./build.sh
-# → x-to-bsky-v1.0.0.zip が生成される
+# → x-to-bsky-v${VERSION}.zip が生成される (VERSION は manifest.json から取得)
 ```
 
 ## 関連コンテキスト

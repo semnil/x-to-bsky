@@ -59,7 +59,7 @@ X (Twitter) の投稿ボタンをフックし、同じテキスト・画像を B
 ```bash
 chmod +x build.sh
 ./build.sh
-# → x-to-bsky-v1.0.0.zip が生成される
+# → x-to-bsky-v${VERSION}.zip が生成される (VERSION は manifest.json から取得)
 ```
 
 ## ファイル構成
