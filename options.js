@@ -38,6 +38,8 @@ const i18n = {
     behaviorTitle: "投稿オプション",
     includeQuoteUrlLabel: "引用 RT のリンクを Bluesky に含める",
     includeQuoteUrlHint: "引用元ポストの X リンクをテキスト末尾に追加します",
+    postRepliesLabel: "リプライを Bluesky にポストする",
+    postRepliesHint: "他のポストへの返信も Bluesky にクロスポストします",
     includeLinkCardLabel: "リンクカードを Bluesky に表示",
     includeLinkCardHint: "URL を含むポストにサムネイル付きリンクカードを自動添付します",
     includeLinkCardPermNote: "有効化時にウェブサイトへのアクセス権限が求められます。無効化すると権限は自動で解除されます",
@@ -79,6 +81,8 @@ const i18n = {
     behaviorTitle: "Post Options",
     includeQuoteUrlLabel: "Include quoted post URL on Bluesky",
     includeQuoteUrlHint: "Appends the X link of the quoted post to the end of your text",
+    postRepliesLabel: "Post replies to Bluesky",
+    postRepliesHint: "Also cross-posts replies to other posts to Bluesky",
     includeLinkCardLabel: "Show link cards on Bluesky",
     includeLinkCardHint: "Automatically attaches a thumbnail link card when your post contains a URL",
     includeLinkCardPermNote: "Enabling this will request web access permission. Disabling removes the permission automatically",
@@ -125,6 +129,7 @@ const resetSelectorsBtn = document.getElementById("resetSelectors");
 const selectorMessageEl = document.getElementById("selectorMessage");
 
 const includeQuoteUrlToggle = document.getElementById("includeQuoteUrl");
+const postRepliesToggle = document.getElementById("postReplies");
 const includeLinkCardToggle = document.getElementById("includeLinkCard");
 const linkCardThumbnailToggle = document.getElementById("linkCardThumbnail");
 
@@ -133,7 +138,7 @@ const linkCardThumbnailToggle = document.getElementById("linkCardThumbnail");
 
 chrome.storage.local.get(
   ["bskyHandle", "bskyAppPassword", "customSelectors", "includeQuoteUrl",
-   "includeLinkCard", "linkCardThumbnail"],
+   "postReplies", "includeLinkCard", "linkCardThumbnail"],
   (data) => {
     if (data.bskyHandle) handleInput.value = data.bskyHandle;
     if (data.bskyAppPassword) passwordInput.value = data.bskyAppPassword;
@@ -147,6 +152,7 @@ chrome.storage.local.get(
 
     // Behavior toggles
     includeQuoteUrlToggle.checked = !!data.includeQuoteUrl;
+    postRepliesToggle.checked = !!data.postReplies;
 
     // Link card toggle: sync with actual permission state
     linkCardThumbnailToggle.checked = data.linkCardThumbnail !== false;
@@ -242,6 +248,10 @@ resetSelectorsBtn.addEventListener("click", () => {
 
 includeQuoteUrlToggle.addEventListener("change", () => {
   chrome.storage.local.set({ includeQuoteUrl: includeQuoteUrlToggle.checked });
+});
+
+postRepliesToggle.addEventListener("change", () => {
+  chrome.storage.local.set({ postReplies: postRepliesToggle.checked });
 });
 
 includeLinkCardToggle.addEventListener("change", () => {

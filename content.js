@@ -9,20 +9,24 @@
   const MIN_IMAGE_PX = 80;       // skip images smaller than this (icons, emoji)
   const PARENT_WALK_DEPTH = 10;  // levels to walk up from textarea to find compose block
   const STATUS_URL_RE = /https?:\/\/(x\.com|twitter\.com)\/[^/]+\/status\/\d+/;
+  const STATUS_PAGE_RE = /\/status\/\d+/;
+  const REPLY_TWEET_SELECTOR = '[data-testid="tweet"]';
 
   let enabled = true;
   let configured = false;
   let includeQuoteUrl = false;
+  let postReplies = false;
   let selectors = { ...DEFAULT_SELECTORS };
 
   // Load all settings from storage in a single call
   chrome.storage.local.get(
-    ["customSelectors", "includeQuoteUrl", "bskyHandle", "crosspostEnabled"],
+    ["customSelectors", "includeQuoteUrl", "postReplies", "bskyHandle", "crosspostEnabled"],
     (data) => {
       if (data.customSelectors) {
         selectors = { ...DEFAULT_SELECTORS, ...data.customSelectors };
       }
       includeQuoteUrl = !!data.includeQuoteUrl;
+      postReplies = !!data.postReplies;
       configured = !!data.bskyHandle;
       enabled = data.crosspostEnabled !== false;
     }
@@ -38,6 +42,9 @@
     }
     if (changes.includeQuoteUrl) {
       includeQuoteUrl = !!changes.includeQuoteUrl.newValue;
+    }
+    if (changes.postReplies) {
+      postReplies = !!changes.postReplies.newValue;
     }
     if (changes.customSelectors) {
       selectors = changes.customSelectors.newValue
@@ -235,6 +242,25 @@
     return null;
   }
 
+  // ─── Reply Detection ────────────────────────────────────
+
+  /**
+   * Detect whether the active compose is a reply to an existing post.
+   * - Modal: a reply modal renders the source tweet above the composer, whereas
+   *   a quote modal embeds it as a quoteTweet and a new-post modal has neither.
+   * - Inline: an inline composer on a /status/ page is an inline reply
+   *   (the home/profile inline composer is not on a /status/ page).
+   */
+  function isReplyContext() {
+    const textarea = getTextareaEl(0);
+    const dialog = textarea ? textarea.closest('[role="dialog"]') : null;
+    if (dialog) {
+      if (dialog.querySelector(selectors.quoteTweetLink)) return false;
+      return !!dialog.querySelector(REPLY_TWEET_SELECTOR);
+    }
+    return STATUS_PAGE_RE.test(location.pathname);
+  }
+
   // ─── Thread Extraction ──────────────────────────────────
 
   /**
@@ -322,6 +348,9 @@
       showToast("Bluesky: please reload this page", true);
       return;
     }
+
+    // Skip replies to existing posts unless the user opted in
+    if (!postReplies && isReplyContext()) return;
 
     const thread = extractComposeThread();
     if (thread.length === 0) {

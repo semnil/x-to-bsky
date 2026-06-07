@@ -47,6 +47,7 @@ x-to-bsky/
 - テキスト抽出: `tweetTextarea_${n}` を 0 からインクリメントしてスレッド全体を取得
 - 画像抽出: textarea 近傍の `<img>` を canvas 経由で base64 キャプチャ (同期処理)。`object-fit: cover` の画像は `getVisibleRect()` で表示領域のみをクロップしてキャプチャ。キャプチャ結果に `width`/`height` を含め、AT Protocol `aspectRatio` フィールドとして Bluesky に送信
 - フォールバック: `.DraftEditor-root [data-text="true"]`
+- リプライ判定: `isReplyContext()` で既存ポストへの返信かを検出 (モーダルは返信先ツイート `[data-testid="tweet"]` の有無で判定、引用 RT は除外。`/status/` ページのインライン compose は返信とみなす)。`postReplies` が OFF (デフォルト) の場合は返信をクロスポストしない
 - 投稿ボタンに 🦋 バッジを MutationObserver で動的付与
 - トースト通知で Bluesky 投稿結果を表示 (成功: 青, 失敗: 赤, スレッド件数表示)
 - 初期状態読み込み: `chrome.storage.local.get` で直接読み込み (SW 起動不要)。`storage.onChanged` で全設定をリアルタイム同期
@@ -78,7 +79,7 @@ x-to-bsky/
 
 ### 認証情報の保存
 
-- `chrome.storage.local` に `bskyHandle`, `bskyAppPassword`, `crosspostEnabled`, `customSelectors`, `includeQuoteUrl`, `includeLinkCard`, `linkCardThumbnail` を保存
+- `chrome.storage.local` に `bskyHandle`, `bskyAppPassword`, `crosspostEnabled`, `customSelectors`, `includeQuoteUrl`, `postReplies`, `includeLinkCard`, `linkCardThumbnail` を保存
 - App Password を使用（メインパスワードではない）
 - `host_permissions`: `bsky.social`, `*.bsky.network`
 - `optional_host_permissions`: `<all_urls>` — 設定画面でリンクカード機能を有効化した時点でウェブアクセス権限を一括付与。無効化すると自動解除。background.js は投稿時に `hasHostPermission()` で権限チェックし、未許可ドメインはカードなしで投稿
@@ -96,6 +97,7 @@ x-to-bsky/
 - **長い URL**: 300 grapheme を超える percent-encoded URL は公式 Bluesky アプリと同様に省略表示 (`https://` 除去 + パス切り詰め `...`) に変換。facet URI に原文 URL を保持しクリック可能
 - **スレッド**: X の「+」ボタンで複数ポストを一度に作成した場合のみ Bluesky でも reply chain として投稿される。既存ポストへの返信によるスレッド追加は、対応する Bluesky 側の親ポストを特定できないため未対応
 - **引用 RT**: デフォルトではコメントテキストのみ投稿される。設定画面の「投稿オプション」で有効化すると、引用元ポストの X リンクをテキスト末尾に追加可能
+- **リプライ**: 既存ポストへの返信はデフォルトで Bluesky にクロスポストされない。設定画面の「投稿オプション」で「リプライを Bluesky にポストする」を有効化すると、返信テキストも独立した新規ポストとしてクロスポストされる (Bluesky 側の reply chain にはならず、X の返信先とも紐づかない)
 - **リンクカード**: URL を含むポストで画像がない場合、OGP メタデータからサムネイル付きリンクカードを自動生成。OGP 非対応サイトはタイトルなしカードにフォールバック。デフォルト無効、設定画面で有効化時にウェブアクセス権限を一括付与 (無効化で自動解除)。未許可ドメインはカードなしで投稿
 - **RT (リポスト)**: テキスト入力を伴わないため作用しない（意図通り）
 
@@ -108,6 +110,7 @@ x-to-bsky/
 5. スレッド投稿 (X の「+」ボタンで複数ツイート) → Bluesky でも reply chain になることを確認
 6. 300 文字超テスト → 自動分割されてスレッドとして投稿されることを確認
 7. ポップアップで OFF → 投稿しても Bluesky に送信されないことを確認
+8. 既存ポストへの返信 → デフォルトでは Bluesky に投稿されない。設定で「リプライを Bluesky にポストする」を ON にすると投稿されることを確認
 9. 設定画面の Advanced → セレクタ変更・リセットが反映されることを確認
 10. 設定でリンクカードを有効化 → 権限ダイアログが表示され、許可後にトグル ON になることを確認
 11. URL 付きテスト投稿 → Bluesky 側でサムネイル付きリンクカードが表示されることを確認
