@@ -34,3 +34,5 @@ jobs:
 
       - name: Run Tests ✅
         run: npm test
+  probe-job:
+    uses: ./.github/workflows/probe-reusable.yml
