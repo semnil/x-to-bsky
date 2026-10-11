@@ -29,6 +29,7 @@
       postReplies = !!data.postReplies;
       configured = !!data.bskyHandle;
       enabled = data.crosspostEnabled !== false;
+      syncBadges();
     }
   );
 
@@ -50,6 +51,10 @@
       selectors = changes.customSelectors.newValue
         ? { ...DEFAULT_SELECTORS, ...changes.customSelectors.newValue }
         : { ...DEFAULT_SELECTORS };
+      removeBadges();
+    }
+    if (changes.crosspostEnabled || changes.bskyHandle || changes.customSelectors) {
+      syncBadges();
     }
   });
 
@@ -390,13 +395,26 @@
     const badge = document.createElement("span");
     badge.className = "xtobsky-badge";
     badge.textContent = "🦋";
-    badge.title = enabled
-      ? "Bluesky crosspost: ON"
-      : "Bluesky crosspost: OFF";
-    if (!enabled) badge.classList.add("xtobsky-badge--off");
+    badge.title = "Bluesky crosspost: ON";
 
     button.style.position = "relative";
     button.appendChild(badge);
+  }
+
+  function removeBadges() {
+    document.querySelectorAll(".xtobsky-badge").forEach((badge) => badge.remove());
+  }
+
+  /**
+   * Show the badge on every post button while crossposting is active,
+   * and remove all badges otherwise.
+   */
+  function syncBadges() {
+    if (!enabled || !configured) {
+      removeBadges();
+      return;
+    }
+    document.querySelectorAll(selectors.postButton).forEach(injectBadge);
   }
 
   // Debounced MutationObserver — x.com mutates the DOM heavily,
@@ -404,12 +422,11 @@
   let badgeRafPending = false;
 
   const observer = new MutationObserver(() => {
-    if (!configured || badgeRafPending) return;
+    if (!enabled || !configured || badgeRafPending) return;
     badgeRafPending = true;
     requestAnimationFrame(() => {
       badgeRafPending = false;
-      const buttons = document.querySelectorAll(selectors.postButton);
-      buttons.forEach(injectBadge);
+      syncBadges();
     });
   });
 

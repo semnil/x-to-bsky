@@ -42,8 +42,3 @@
   filter: saturate(1.2);
   transition: opacity 0.2s ease;
 }
-
-.xtobsky-badge--off {
-  opacity: 0.3;
-  filter: grayscale(1);
-}
