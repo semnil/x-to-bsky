@@ -24,8 +24,9 @@ x-to-bsky/
 │   └── generate-png.html  # PNG 生成ヘルパー
 ├── build.sh             # zip パッケージング
 ├── test/lib.test.js     # Vitest 単体テスト (lib.js)
-├── test/release.test.js # Vitest: Release ワークフローの構成と tools/ のスクリプト
-├── tools/check-tag.sh   # Release: 起動イベントとタグ名からリリースの可否を判定
+├── test/release.test.js # Vitest: Release / Tag release ワークフローの構成と tools/ のスクリプト
+├── tools/check-tag.sh   # Release: タグ上の run かどうかとタグ名からリリースの可否を判定
+├── tools/tag-plan.sh    # Tag release: master の commit が版を動かしたときに付けるタグを出力
 ├── tools/verify-version.sh # Release: タグと manifest.json の version / version_name の一致確認
 ├── package.json         # dev dependencies (vitest)
 ├── SECURITY_AUDIT.md    # セキュリティ監査レポート
@@ -128,7 +129,9 @@ chmod +x build.sh
 # → x-to-bsky-v${VERSION}.zip が生成される (VERSION は manifest.json から取得)
 ```
 
-`v*.*.*` タグ (`-beta` / `-rc` / `-alpha` 付きを含む) の push で `.github/workflows/release.yaml` が走る。CI と同じテストの後に `build.sh` で zip を作り、アップロード後にダウンロードした zip のファイル名と sha256 を照合してから、zip を添付した draft Release を作る。手動起動 (`workflow_dispatch`) では照合まで行い、Release は作らない。プレリリースのタグは manifest.json の `version_name` と一致させる。
+版上げ PR (manifest.json の `version` / `version_name` だけを変える PR) のマージがリリースになる。master への push で CI が成功すると `.github/workflows/tag-release.yaml` が走り、`tools/tag-plan.sh` がその commit と親の manifest.json を比べる。版 (`version_name` があればそれ、無ければ `version`) が動いていれば `v<版>` タグをその commit に付けて push し、そのタグの上で `release.yaml` を起動する。版が動いていない push では何もしない。同じ名前のタグが別の commit にあれば失敗し、タグは動かさない。
+
+`.github/workflows/release.yaml` はタグの上の run (タグの push、またはタグの上での `workflow_dispatch`) でリリースする。CI と同じテストの後に `build.sh` で zip を作り、アップロード後にダウンロードした zip のファイル名と sha256 を照合してから、zip を添付した draft Release を作る。ブランチの上の手動起動では照合まで行い、Release は作らない。プレリリースのタグは manifest.json の `version_name` と一致させる。
 
 ## 関連コンテキスト
 
