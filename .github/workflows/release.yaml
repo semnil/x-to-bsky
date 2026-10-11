@@ -15,6 +15,7 @@ jobs:
   check-event:
     name: Check Release Tag ☑️
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     defaults:
       run:
         shell: bash
@@ -23,99 +24,116 @@ jobs:
       prerelease: ${{ steps.check.outputs.prerelease }}
       validTag: ${{ steps.check.outputs.validTag }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Check Tag ☑️
         id: check
-        run: |
-          : Check Release Tag
-          if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
-          shopt -s extglob
-
-          if [[ "${GITHUB_EVENT_NAME}" != 'push' ]]; then
-            echo 'validTag=false' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          tag="${GITHUB_REF_NAME#v}"
-          case "${tag}" in
-            +([0-9]).+([0-9]).+([0-9]) )
-              echo 'validTag=true' >> "$GITHUB_OUTPUT"
-              echo 'prerelease=false' >> "$GITHUB_OUTPUT"
-              echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-              ;;
-            +([0-9]).+([0-9]).+([0-9])-@(beta|rc|alpha)*([0-9.]) )
-              echo 'validTag=true' >> "$GITHUB_OUTPUT"
-              echo 'prerelease=true' >> "$GITHUB_OUTPUT"
-              echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo 'validTag=false' >> "$GITHUB_OUTPUT"
-              ;;
-          esac
+        run: bash tools/check-tag.sh
 
   build:
-    name: Build Extension 🧱
+    name: Build Extension Zip 🧱
     needs: check-event
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      archive: ${{ steps.pack.outputs.archive }}
+      digest: ${{ steps.pack.outputs.digest }}
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set Up Node 🟢
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '20'
 
+      - name: Enable Corepack 📦
+        run: corepack enable
+
       - name: Install Dependencies 📦
         run: npm install
+        timeout-minutes: 5
 
       - name: Run Tests ✅
         run: npm test
 
+      # Runs only for a release tag: a hand-started run has a branch name where
+      # the tag would be, and the release step below reads the same flag.
       - name: Verify manifest version matches tag 🔍
         if: needs.check-event.outputs.validTag == 'true'
-        env:
-          TAG_VERSION: ${{ needs.check-event.outputs.version }}
+        run: bash tools/verify-version.sh
+
+      # Records the name and sha256 of the one archive it packed, which the
+      # release job compares against what the download returns.
+      - name: Pack Extension 📦
+        id: pack
         run: |
-          manifest_version=$(node -p "require('./manifest.json').version")
-          expected="${TAG_VERSION#v}"
-          expected="${expected%%-*}"
-          if [[ "$manifest_version" != "$expected" ]]; then
-            echo "::error::manifest.json version ($manifest_version) does not match tag ($expected)"
+          : Pack Extension
+          if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
+          shopt -s nullglob
+          bash build.sh
+          built=( x-to-bsky-v*.zip )
+          if [[ ${#built[@]} -ne 1 ]]; then
+            echo "::error::packing left ${#built[@]} archives, not one: ${built[*]}"
             exit 1
           fi
-
-      - name: Build Zip Package 🧱
-        run: |
-          chmod +x build.sh
-          ./build.sh
+          echo "archive=${built[0]}" >> "$GITHUB_OUTPUT"
+          echo "digest=$(sha256sum "${built[0]}" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Upload Artifacts 📡
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: x-to-bsky-extension
-          path: |
-            x-to-bsky-v*.zip
+          path: x-to-bsky-v*.zip
           if-no-files-found: error
 
-  create-release:
-    name: Create Release 🛫
+  release:
+    name: Check The Archive And Release 🛫
     needs: [check-event, build]
-    if: needs.check-event.outputs.validTag == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     defaults:
       run:
         shell: bash
     steps:
       - name: Download Build Artifacts 📥
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
           merge-multiple: true
 
+      # Runs whether or not a release is being made: the downloaded archive has
+      # to carry the name and the sha256 the build recorded.
+      - name: Check What Came Back 🔍
+        env:
+          PACKED_ARCHIVE: ${{ needs.build.outputs.archive }}
+          PACKED_DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          : Check What Came Back
+          if [[ "${RUNNER_DEBUG}" ]]; then set -x; fi
+          shopt -s nullglob
+          came=( artifacts/*.zip )
+          if [[ ${#came[@]} -ne 1 ]]; then
+            echo "::error::the download holds ${#came[@]} archives, not one: ${came[*]}"
+            exit 1
+          fi
+          name="$(basename "${came[0]}")"
+          if [[ "${name}" != "${PACKED_ARCHIVE}" ]]; then
+            echo "::error::the archive came back as ${name}, packed as ${PACKED_ARCHIVE}"
+            exit 1
+          fi
+          got="$(sha256sum "${came[0]}" | cut -d' ' -f1)"
+          if [[ "${got}" != "${PACKED_DIGEST}" ]]; then
+            echo "::error::the archive came back as ${got}, packed as ${PACKED_DIGEST}"
+            exit 1
+          fi
+          echo "${name} came back as it went: ${got}"
+
       - name: Create Release 🛫
-        uses: softprops/action-gh-release@9d7c94cfd0a1f3ed45544c887983e9fa900f0564 # v2.0.4
+        if: needs.check-event.outputs.validTag == 'true'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           draft: true
           prerelease: ${{ needs.check-event.outputs.prerelease == 'true' }}

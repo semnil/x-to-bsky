@@ -24,6 +24,9 @@ x-to-bsky/
 │   └── generate-png.html  # PNG 生成ヘルパー
 ├── build.sh             # zip パッケージング
 ├── test/lib.test.js     # Vitest 単体テスト (lib.js)
+├── test/release.test.js # Vitest: Release ワークフローの構成と tools/ のスクリプト
+├── tools/check-tag.sh   # Release: 起動イベントとタグ名からリリースの可否を判定
+├── tools/verify-version.sh # Release: タグと manifest.json の version / version_name の一致確認
 ├── package.json         # dev dependencies (vitest)
 ├── SECURITY_AUDIT.md    # セキュリティ監査レポート
 ├── README.md            # セットアップ手順・仕様説明
@@ -124,6 +127,8 @@ chmod +x build.sh
 ./build.sh
 # → x-to-bsky-v${VERSION}.zip が生成される (VERSION は manifest.json から取得)
 ```
+
+`v*.*.*` タグ (`-beta` / `-rc` / `-alpha` 付きを含む) の push で `.github/workflows/release.yaml` が走る。CI と同じテストの後に `build.sh` で zip を作り、アップロード後にダウンロードした zip のファイル名と sha256 を照合してから、zip を添付した draft Release を作る。手動起動 (`workflow_dispatch`) では照合まで行い、Release は作らない。プレリリースのタグは manifest.json の `version_name` と一致させる。
 
 ## 関連コンテキスト
 
