@@ -1,6 +1,6 @@
 # セキュリティ監査レポート — X to Bluesky Crossposter
 
-**日付**: 2026-04-05 (2026-04-09 更新, 2026-04-10 更新, 2026-04-12 更新, 2026-04-29 更新)
+**日付**: 2026-04-05 (2026-04-09 更新, 2026-04-10 更新, 2026-04-12 更新, 2026-04-29 更新, 2026-10-11 更新)
 **対象**: 全ソースファイル (manifest.json, background.js, lib.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
 **手法**: OWASP Top 10 for Browser Extensions、Chrome MV3 セキュリティモデルレビュー、AT Protocol 認証情報取り扱い分析
 
@@ -218,6 +218,15 @@
   - 5 秒タイムアウト設定あり
 - **緩和策**: デフォルト無効。設定画面で有効化時に権限ダイアログが表示される。サムネイルのみの無効化も可能。
 
+### 6.6 投稿ボタンのバッジ表示の状態同期 (2026-10-11) (INFORMATIONAL)
+
+- **場所**: `content.js:syncBadges()`, `content.js:removeBadges()`, `content.js` の `storage.onChanged` リスナー
+- **変更内容**: クロスポストが ON かつ認証設定済みのときだけ投稿ボタンにバッジを付け、それ以外では全バッジを外す。`crosspostEnabled`・`bskyHandle`・`customSelectors` の変更時と初期読み込み時に既存ボタンへ反映する。OFF 用のバッジ (`.xtobsky-badge--off`) は廃止。
+- **評価**:
+  - **DOM 挿入**: バッジは `textContent` に固定文字列を設定した `span` のみ。ページ由来の値を DOM に書き込む経路はない。
+  - **DOM 削除**: `removeBadges()` が削除するのは `.xtobsky-badge` クラスの要素のみで、X 側の要素には触れない。
+  - **権限**: 追加の権限・通信はない。
+
 ---
 
 ## 7. Content Security Policy
@@ -267,6 +276,7 @@
 | 6.2 | ストレージ直接読み取り移行 (newValue=undefined / get失敗 / レース) | INFO | 問題なし — 詳細は §6.2 参照 |
 | 6.3 | URL 省略表示と facet URI 分離 (text/facet の値が異なる) | INFO | 問題なし — 詳細は §6.3 参照 |
 | 6.5 | リンクカード外部通信 | LOW-MEDIUM | デフォルト無効、optional_host_permissions |
+| 6.6 | 投稿ボタンのバッジ表示の状態同期 (固定文字列の挿入・自クラスのみ削除) | INFO | 問題なし — 詳細は §6.6 参照 |
 
 **CRITICAL または HIGH の所見なし。**
 
