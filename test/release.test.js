@@ -352,13 +352,15 @@ describe("tag-release.yaml", () => {
       stub("git", `if [[ "$1" == ls-remote ]]; then printf '%s' "$STUB_REMOTE"; fi`);
       stub("gh", `if [[ "$1 $2" == "run list" ]]; then echo "$STUB_RUNS"; fi`);
       fs.writeFileSync(path.join(box, "tools", "tag-plan.sh"), `echo "tag-plan $*" >> "${log.replace(/\\/g, "/")}"\nprintf '%s' "$STUB_PLAN"\nexit "$STUB_PLAN_STATUS"\n`);
-      fs.writeFileSync(path.join(box, "step.sh"), stepScript());
+      // Puts the stubs at the front of PATH from inside the script, ahead of
+      // anything a bash launcher adds to PATH before the script runs.
+      fs.writeFileSync(path.join(box, "step.sh"), `export PATH="$(cd "$STUB_BIN" && pwd):$PATH"\n${stepScript()}`);
       const run = spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "step.sh"], {
         cwd: box,
         encoding: "utf8",
         env: {
           ...process.env,
-          PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+          STUB_BIN: bin.replace(/\\/g, "/"),
           HEAD_SHA: HEAD,
           RUNNER_DEBUG: "",
           STUB_PLAN: plan,
