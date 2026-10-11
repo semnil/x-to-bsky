@@ -114,8 +114,8 @@ describe("tools/verify-version.sh", () => {
   });
 
   it("accepts this repository's manifest against its own version tag", () => {
-    const { version } = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
-    const run = spawnSync("bash", [script, "manifest.json", `v${version}`], { encoding: "utf8" });
+    const { version, version_name } = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+    const run = spawnSync("bash", [script, "manifest.json", `v${version_name || version}`], { encoding: "utf8" });
     expect(run.status, run.stdout + run.stderr).toBe(0);
   });
 });
