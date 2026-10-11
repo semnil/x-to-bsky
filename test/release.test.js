@@ -92,6 +92,10 @@ describe("tools/verify-version.sh", () => {
   it.each([
     ["a release tag against a numeric version", { version: "1.2.0" }, "v1.2.0"],
     ["a prerelease tag against version_name", { version: "1.2.0", version_name: "1.2.0-rc1" }, "v1.2.0-rc1"],
+    ["a release tag against a version_name equal to the version", { version: "1.0.1", version_name: "1.0.1" }, "v1.0.1"],
+    ["an alpha tag on the same numbers", { version: "1.0.1", version_name: "1.0.1-alpha" }, "v1.0.1-alpha"],
+    ["a beta tag on the same numbers", { version: "1.0.1", version_name: "1.0.1-beta2" }, "v1.0.1-beta2"],
+    ["an rc tag on the same numbers", { version: "1.0.1", version_name: "1.0.1-rc1" }, "v1.0.1-rc1"],
   ])("%s passes", (_, manifest, tag) => {
     const run = ask(manifest, tag);
     expect(run.status, run.stdout + run.stderr).toBe(0);
@@ -101,6 +105,7 @@ describe("tools/verify-version.sh", () => {
     ["a tag that is not the version", { version: "1.2.0" }, "v1.2.1", /does not match tag/],
     ["a release tag against a manifest showing a prerelease", { version: "1.2.0", version_name: "1.2.0-rc1" }, "v1.2.0", /does not match tag/],
     ["a name that is not built on the version", { version: "1.2.0", version_name: "9.9.9-rc1" }, "v9.9.9-rc1", /does not begin with version/],
+    ["a name whose numbers only start with the version", { version: "1.0.1", version_name: "1.0.10-rc1" }, "v1.0.10-rc1", /does not begin with version/],
     ["a manifest naming no version", { name: "p" }, "v1.2.0", /names no version/],
   ])("%s is refused", (_, manifest, tag, why) => {
     const run = ask(manifest, tag);
