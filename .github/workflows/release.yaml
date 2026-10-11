@@ -8,6 +8,12 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
 
+# One group per ref, so a dispatch on a tag that is already building queues
+# instead of assembling the same draft Release beside it.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -59,7 +65,7 @@ jobs:
       - name: Run Tests ✅
         run: npm test
 
-      # Runs only for a release tag: a hand-started run has a branch name where
+      # Runs only for a release tag: a run on a branch has a branch name where
       # the tag would be, and the release step below reads the same flag.
       - name: Verify manifest version matches tag 🔍
         if: needs.check-event.outputs.validTag == 'true'

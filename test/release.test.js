@@ -35,12 +35,12 @@ describe("tools/check-tag.sh", () => {
   });
   afterAll(() => fs.rmSync(box, { recursive: true, force: true }));
 
-  function ask(event, ref) {
+  function ask(refType, ref) {
     const out = path.join(box, "out");
     fs.writeFileSync(out, "");
     const run = spawnSync("bash", [script], {
       encoding: "utf8",
-      env: { ...process.env, GITHUB_EVENT_NAME: event, GITHUB_REF_NAME: ref, GITHUB_OUTPUT: out, RUNNER_DEBUG: "" },
+      env: { ...process.env, GITHUB_REF_TYPE: refType, GITHUB_REF_NAME: ref, GITHUB_OUTPUT: out, RUNNER_DEBUG: "" },
     });
     return { run, wrote: fs.readFileSync(out, "utf8").trim().split("\n").filter(Boolean) };
   }
@@ -50,21 +50,21 @@ describe("tools/check-tag.sh", () => {
   });
 
   const accepted = [
-    ["push", "v1.2.3", ["validTag=true", "prerelease=false", "version=v1.2.3"]],
-    ["push", "v1.2.3-rc1", ["validTag=true", "prerelease=true", "version=v1.2.3-rc1"]],
-    ["push", "v1.2.3-beta2", ["validTag=true", "prerelease=true", "version=v1.2.3-beta2"]],
-    ["push", "v1.2.3-alpha", ["validTag=true", "prerelease=true", "version=v1.2.3-alpha"]],
-    ["workflow_dispatch", "master", ["validTag=false"]],
-    ["workflow_dispatch", "v1.2.3", ["validTag=false"]],
+    ["tag", "v1.2.3", ["validTag=true", "prerelease=false", "version=v1.2.3"]],
+    ["tag", "v1.2.3-rc1", ["validTag=true", "prerelease=true", "version=v1.2.3-rc1"]],
+    ["tag", "v1.2.3-beta2", ["validTag=true", "prerelease=true", "version=v1.2.3-beta2"]],
+    ["tag", "v1.2.3-alpha", ["validTag=true", "prerelease=true", "version=v1.2.3-alpha"]],
+    ["branch", "master", ["validTag=false"]],
+    ["branch", "v1.2.3", ["validTag=false"]],
   ];
-  it.each(accepted)("%s of %s passes and writes its flags", (event, ref, wanted) => {
-    const { run, wrote } = ask(event, ref);
+  it.each(accepted)("a run on %s %s passes and writes its flags", (refType, ref, wanted) => {
+    const { run, wrote } = ask(refType, ref);
     expect(run.status, run.stdout + run.stderr).toBe(0);
     expect(wrote).toEqual(wanted);
   });
 
-  it.each([["v1.2.3.4"], ["v1.2"], ["v1.2.3-nightly"]])("a push of %s is refused and writes no flag", (ref) => {
-    const { run, wrote } = ask("push", ref);
+  it.each([["v1.2.3.4"], ["v1.2"], ["v1.2.3-nightly"]])("a run on tag %s is refused and writes no flag", (ref) => {
+    const { run, wrote } = ask("tag", ref);
     expect(run.status).not.toBe(0);
     expect(run.stdout + run.stderr).toMatch(/::error::tag .* names no release/);
     expect(wrote).toEqual([]);
@@ -180,4 +180,14 @@ describe("release.yaml", () => {
       expect(jobIn(release, name), name).toMatch(/\n {4}timeout-minutes: \d+/);
     }
   });
+
+  it("runs one release per ref at a time without cancelling the one in flight", () => {
+    expect(release).toMatch(/\nconcurrency:\n {2}group: release-\$\{\{ github\.ref \}\}\n {2}cancel-in-progress: false\n/);
+  });
+
+  it("starts on a release tag push and on a dispatch", () => {
+    expect(release).toMatch(/\non:\n {2}push:\n {4}tags:\n/);
+    expect(release).toMatch(/\n {2}workflow_dispatch:\n/);
+  });
 });
+
