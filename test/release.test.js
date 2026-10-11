@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 
 const WORKFLOWS = ".github/workflows";
 const release = fs.readFileSync(`${WORKFLOWS}/release.yaml`, "utf8");
+const tagRelease = fs.readFileSync(`${WORKFLOWS}/tag-release.yaml`, "utf8");
 
 // Returns the text of one job, from its key line up to the next job key.
 function jobIn(text, name) {
@@ -191,3 +192,244 @@ describe("release.yaml", () => {
   });
 });
 
+describe("tools/tag-plan.sh", () => {
+  const script = path.resolve("tools/tag-plan.sh");
+  let repo;
+  const git = (...args) => {
+    const run = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+    if (run.status !== 0) throw new Error(`git ${args.join(" ")}: ${run.stderr}`);
+    return run.stdout.trim();
+  };
+  // Commits a manifest.json holding the given fields, or no manifest.json for null.
+  const commit = (manifest) => {
+    const at = path.join(repo, "manifest.json");
+    if (manifest === null) {
+      fs.rmSync(at, { force: true });
+      fs.writeFileSync(path.join(repo, "other.txt"), String(Math.random()));
+    } else {
+      fs.writeFileSync(at, JSON.stringify(manifest));
+    }
+    git("add", "-A");
+    git("commit", "-q", "--allow-empty", "-m", "c");
+    return git("rev-parse", "HEAD");
+  };
+  const plan = (sha) => spawnSync("bash", [script, sha], { cwd: repo, encoding: "utf8" });
+
+  beforeEach(() => {
+    repo = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "x2b-plan-"));
+    git("init", "-q", "-b", "master");
+    git("config", "user.email", "test@example.invalid");
+    git("config", "user.name", "test");
+    git("config", "commit.gpgsign", "false");
+  });
+  afterEach(() => fs.rmSync(repo, { recursive: true, force: true }));
+
+  it("is run by the tag workflow", () => {
+    expect(tagRelease).toContain('bash tools/tag-plan.sh "${HEAD_SHA}"');
+  });
+
+  it("prints nothing for a commit with no parent", () => {
+    const run = plan(commit({ version: "1.0.9" }));
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stdout).toBe("");
+  });
+
+  it("prints nothing where the version did not move", () => {
+    commit({ version: "1.0.9" });
+    fs.writeFileSync(path.join(repo, "other.txt"), "x");
+    const run = plan(commit({ version: "1.0.9" }));
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stdout).toBe("");
+  });
+
+  it.each([
+    ["a release", { version: "1.0.9" }, { version: "1.0.10" }, "v1.0.10"],
+    ["a prerelease", { version: "1.0.9" }, { version: "1.0.10", version_name: "1.0.10-rc1" }, "v1.0.10-rc1"],
+    ["the next prerelease", { version: "1.0.10", version_name: "1.0.10-rc1" }, { version: "1.0.10", version_name: "1.0.10-rc2" }, "v1.0.10-rc2"],
+    ["a release after its prerelease", { version: "1.0.10", version_name: "1.0.10-rc1" }, { version: "1.0.10" }, "v1.0.10"],
+  ])("prints the tag alone for %s", (_, before, after, tag) => {
+    commit(before);
+    const run = plan(commit(after));
+    expect(run.status, run.stderr).toBe(0);
+    expect(run.stdout).toBe(`${tag}\n`);
+  });
+
+  it.each([
+    ["a tag the release path declines", { version: "1.0.10", version_name: "1.0.10-nightly" }, /names no release/],
+    ["a version_name not built on the version", { version: "1.0.1", version_name: "1.0.10-rc1" }, /does not begin with version/],
+  ])("refuses %s and prints no tag", (_, after, why) => {
+    commit({ version: "1.0.9" });
+    const run = plan(commit(after));
+    expect(run.status).not.toBe(0);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toMatch(why);
+  });
+
+  it("refuses where the parent's manifest cannot be read", () => {
+    commit(null);
+    const run = plan(commit({ version: "1.0.10" }));
+    expect(run.status).not.toBe(0);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toMatch(/cannot read manifest.json/);
+  });
+
+  it("answers for the commit it is given, not for HEAD", () => {
+    commit({ version: "1.0.9" });
+    const bump = commit({ version: "1.0.10" });
+    commit({ version: "1.0.11" });
+    expect(plan(bump).stdout).toBe("v1.0.10\n");
+    expect(plan("HEAD").stdout).toBe("v1.0.11\n");
+  });
+});
+
+describe("tag-release.yaml", () => {
+  const job = () => jobIn(tagRelease, "tag");
+
+  it("runs when CI finishes on master", () => {
+    const ci = fs.readFileSync(`${WORKFLOWS}/ci.yaml`, "utf8");
+    expect(ci).toMatch(/^name: CI\n/);
+    expect(ci).toMatch(/\n {2}push:\n {4}branches: \[master\]\n/);
+    expect(tagRelease).toMatch(/\non:\n {2}workflow_run:\n {4}workflows: \[CI\]\n {4}types: \[completed\]\n {4}branches: \[master\]\n/);
+  });
+
+  it("tags only after a successful CI run of a push", () => {
+    expect(job()).toContain(
+      "if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'",
+    );
+  });
+
+  it("checks out the commit CI reported on with its history", () => {
+    expect(job()).toMatch(/ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}\n {10}fetch-depth: 0\n/);
+    expect(job()).toContain("HEAD_SHA: ${{ github.event.workflow_run.head_sha }}");
+  });
+
+  it("can push a tag and dispatch the release, and nothing more", () => {
+    expect(tagRelease).toMatch(/\npermissions:\n {2}contents: write[^\n]*\n {2}actions: write[^\n]*\n\n/);
+  });
+
+  it("never moves or deletes a tag", () => {
+    expect(job()).not.toMatch(/--force|\s-f\b|--delete|git tag -d/);
+  });
+
+  it("dispatches release.yaml on the tag, which release.yaml accepts", () => {
+    expect(job()).toContain('gh workflow run release.yaml --ref "${tag}"');
+    expect(release).toMatch(/\n {2}workflow_dispatch:\n/);
+    expect(fs.readFileSync("tools/check-tag.sh", "utf8")).toContain('ref_type="${1:-${GITHUB_REF_TYPE:-}}"');
+  });
+
+  // Runs the step's script as GitHub runs a bash step, with git, gh and
+  // tools/tag-plan.sh replaced by stubs that log what they were asked.
+  describe("its step, run against stubs", () => {
+    const HEAD = "a".repeat(40);
+    const OTHER = "b".repeat(40);
+    let box;
+    beforeEach(() => {
+      box = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "x2b-step-"));
+    });
+    afterEach(() => fs.rmSync(box, { recursive: true, force: true }));
+
+    function stepScript() {
+      const lines = job().split("\n");
+      const start = lines.findIndex((line) => line.trim() === "run: |");
+      const body = [];
+      for (const line of lines.slice(start + 1)) {
+        if (line.trim() !== "" && !line.startsWith(" ".repeat(10))) break;
+        body.push(line.slice(10));
+      }
+      return body.join("\n") + "\n";
+    }
+
+    function runStep({ plan = "", planStatus = 0, remote = "", releaseRuns = 0 }) {
+      const bin = path.join(box, "bin");
+      fs.mkdirSync(path.join(box, "tools"), { recursive: true });
+      fs.mkdirSync(bin);
+      const log = path.join(box, "log");
+      fs.writeFileSync(log, "");
+      const stub = (name, body) => {
+        fs.writeFileSync(path.join(bin, name), `#!/usr/bin/env bash\necho "${name} $*" >> "${log.replace(/\\/g, "/")}"\n${body}\n`);
+        fs.chmodSync(path.join(bin, name), 0o755);
+      };
+      stub("git", `if [[ "$1" == ls-remote ]]; then printf '%s' "$STUB_REMOTE"; fi`);
+      stub("gh", `if [[ "$1 $2" == "run list" ]]; then echo "$STUB_RUNS"; fi`);
+      fs.writeFileSync(path.join(box, "tools", "tag-plan.sh"), `echo "tag-plan $*" >> "${log.replace(/\\/g, "/")}"\nprintf '%s' "$STUB_PLAN"\nexit "$STUB_PLAN_STATUS"\n`);
+      fs.writeFileSync(path.join(box, "step.sh"), stepScript());
+      const run = spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "step.sh"], {
+        cwd: box,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+          HEAD_SHA: HEAD,
+          RUNNER_DEBUG: "",
+          STUB_PLAN: plan,
+          STUB_PLAN_STATUS: String(planStatus),
+          STUB_REMOTE: remote,
+          STUB_RUNS: String(releaseRuns),
+        },
+      });
+      const calls = fs.readFileSync(log, "utf8").trim().split("\n").filter(Boolean);
+      return { run, calls };
+    }
+
+    const pushes = (calls) => calls.filter((call) => call.startsWith("git push") || call.startsWith("git tag"));
+    const dispatches = (calls) => calls.filter((call) => call.startsWith("gh workflow run"));
+
+    it("does nothing where the plan names no tag", () => {
+      const { run, calls } = runStep({ plan: "" });
+      expect(run.status, run.stderr).toBe(0);
+      expect(calls).toEqual([`tag-plan ${HEAD}`]);
+    });
+
+    it("tags the commit and dispatches the release where the tag is new", () => {
+      const { run, calls } = runStep({ plan: "v1.0.10" });
+      expect(run.status, run.stderr).toBe(0);
+      expect(pushes(calls)).toEqual([`git tag v1.0.10 ${HEAD}`, "git push origin refs/tags/v1.0.10"]);
+      expect(dispatches(calls)).toEqual(["gh workflow run release.yaml --ref v1.0.10"]);
+      expect(calls.findIndex((call) => call.startsWith("git ls-remote"))).toBeLessThan(calls.indexOf(`git tag v1.0.10 ${HEAD}`));
+    });
+
+    it("fails without pushing where the tag names another commit", () => {
+      const { run, calls } = runStep({ plan: "v1.0.10", remote: `${OTHER}\trefs/tags/v1.0.10\n` });
+      expect(run.status).not.toBe(0);
+      expect(run.stdout).toMatch(/::error::v1\.0\.10 already names/);
+      expect(pushes(calls)).toEqual([]);
+      expect(dispatches(calls)).toEqual([]);
+    });
+
+    it("dispatches without pushing where the tag names this commit and no release ran", () => {
+      const { run, calls } = runStep({ plan: "v1.0.10", remote: `${HEAD}\trefs/tags/v1.0.10\n` });
+      expect(run.status, run.stderr).toBe(0);
+      expect(pushes(calls)).toEqual([]);
+      expect(dispatches(calls)).toEqual(["gh workflow run release.yaml --ref v1.0.10"]);
+    });
+
+    it("reads an annotated tag by the commit it peels to", () => {
+      const remote = `${OTHER}\trefs/tags/v1.0.10\n${HEAD}\trefs/tags/v1.0.10^{}\n`;
+      const { run, calls } = runStep({ plan: "v1.0.10", remote });
+      expect(run.status, run.stderr).toBe(0);
+      expect(pushes(calls)).toEqual([]);
+      expect(dispatches(calls)).toEqual(["gh workflow run release.yaml --ref v1.0.10"]);
+    });
+
+    it("leaves a tag alone where the release already ran on it", () => {
+      const { run, calls } = runStep({ plan: "v1.0.10", remote: `${HEAD}\trefs/tags/v1.0.10\n`, releaseRuns: 1 });
+      expect(run.status, run.stderr).toBe(0);
+      expect(pushes(calls)).toEqual([]);
+      expect(dispatches(calls)).toEqual([]);
+    });
+
+    it("fails without touching the remote where the plan fails", () => {
+      const { run, calls } = runStep({ plan: "", planStatus: 1 });
+      expect(run.status).not.toBe(0);
+      expect(calls).toEqual([`tag-plan ${HEAD}`]);
+    });
+  });
+
+  it("does not let one merge cancel another's tagging", () => {
+    expect(tagRelease).toMatch(/\nconcurrency:\n {2}group: tag-release-\$\{\{ github\.event\.workflow_run\.head_sha \}\}\n {2}cancel-in-progress: false\n/);
+  });
+
+  it("puts a timeout on its job", () => {
+    expect(job()).toMatch(/\n {4}timeout-minutes: \d+/);
+  });
+});
