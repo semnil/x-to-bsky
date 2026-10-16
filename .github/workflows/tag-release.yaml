@@ -10,8 +10,8 @@ run-name: tag release for ${{ github.event.workflow_run.head_sha }}
 # commit whose tests have passed.
 #
 # A tag pushed with the repository's GITHUB_TOKEN starts no workflow, so
-# release.yaml is dispatched on the tag. release.yaml decides by the ref type, and
-# a dispatch on a tag makes a release exactly as a tag push does.
+# release.yaml is dispatched on the tag. release.yaml starts only by dispatch and
+# decides by the ref type: a dispatch on a tag makes a release.
 #
 # A push that does not move the version ends here without tagging. A version the
 # release path declines fails the job before the tag is pushed.

@@ -186,9 +186,9 @@ describe("release.yaml", () => {
     expect(release).toMatch(/\nconcurrency:\n {2}group: release-\$\{\{ github\.ref \}\}\n {2}cancel-in-progress: false\n/);
   });
 
-  it("starts on a release tag push and on a dispatch", () => {
-    expect(release).toMatch(/\non:\n {2}push:\n {4}tags:\n/);
-    expect(release).toMatch(/\n {2}workflow_dispatch:\n/);
+  it("starts only on a dispatch, never on a tag push", () => {
+    expect(release).toMatch(/\non:\n {2}workflow_dispatch:\n\n/);
+    expect(release).not.toMatch(/\n {2}push:/);
   });
 });
 
