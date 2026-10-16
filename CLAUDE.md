@@ -29,7 +29,7 @@ x-to-bsky/
 ├── tools/tag-plan.sh    # Tag release: master の commit が版を動かしたときに付けるタグを出力
 ├── tools/verify-version.sh # Release: タグと manifest.json の version / version_name の一致確認
 ├── package.json         # dev dependencies (vitest)
-├── SECURITY_AUDIT.md    # セキュリティ監査レポート
+├── docs/security-audit.md # セキュリティ監査レポート
 ├── PRIVACY_POLICY.md    # プライバシーポリシー (EN。JA は PRIVACY_POLICY_JA.md)
 ├── README.md            # セットアップ手順・仕様説明
 └── CLAUDE.md            # このファイル
