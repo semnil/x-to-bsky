@@ -19,9 +19,9 @@ x-to-bsky/
 ├── popup.js             # ポップアップロジック (トグル ON/OFF)
 ├── options.html         # 設定画面 UI (認証・セレクタ設定)
 ├── options.js           # 設定ロジック (認証・セレクタ・i18n)
-├── icons/               # 16/48/128px PNG + SVG ソースアイコン
-│   ├── icon.svg         # SVG ソース (PNG 生成元)
-│   └── generate-png.html  # PNG 生成ヘルパー
+├── icons/               # 16/48/128px PNG
+├── _locales/            # 拡張名・説明の ja / en メッセージ (manifest.json の __MSG_*__)
+├── .github/workflows/   # GitHub Actions ワークフロー
 ├── build.sh             # zip パッケージング
 ├── test/lib.test.js     # Vitest 単体テスト (lib.js)
 ├── test/release.test.js # Vitest: Release / Tag release ワークフローの構成と tools/ のスクリプト
@@ -30,6 +30,7 @@ x-to-bsky/
 ├── tools/verify-version.sh # Release: タグと manifest.json の version / version_name の一致確認
 ├── package.json         # dev dependencies (vitest)
 ├── SECURITY_AUDIT.md    # セキュリティ監査レポート
+├── PRIVACY_POLICY.md    # プライバシーポリシー (EN。JA は PRIVACY_POLICY_JA.md)
 ├── README.md            # セットアップ手順・仕様説明
 └── CLAUDE.md            # このファイル
 ```
