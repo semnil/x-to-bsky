@@ -1,5 +1,7 @@
 // popup.js
 
+renderIcons();
+
 const toggle = document.getElementById("toggle");
 const statusEl = document.getElementById("status");
 const handleEl = document.getElementById("handle");

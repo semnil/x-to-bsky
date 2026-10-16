@@ -4,7 +4,7 @@
 
 const i18n = {
   ja: {
-    title: "🦋 X to Bluesky — 設定",
+    title: "X to Bluesky — 設定",
     subtitle: 'Bluesky の認証情報を入力してください。<br>App Password を使用します（メインパスワードは使用しません）。',
     handleLabel: "Bluesky ハンドル",
     handlePlaceholder: "yourname.bsky.social",
@@ -23,7 +23,7 @@ const i18n = {
     msgFail: "接続失敗: ",
     msgUnknown: "不明なエラー",
     // Advanced
-    advancedTitle: "⚙ 高度な設定 — DOM セレクタ",
+    advancedTitle: "高度な設定 — DOM セレクタ",
     advancedDesc: "X の DOM 構造が変更された場合にセレクタを更新できます。",
     selPostButton: "投稿ボタン",
     selTextarea: "テキストエリア (${n} = インデックス)",
@@ -47,7 +47,7 @@ const i18n = {
     linkCardThumbnailHint: "無効にするとタイトルのみのリンクカードになります",
   },
   en: {
-    title: "🦋 X to Bluesky — Settings",
+    title: "X to Bluesky — Settings",
     subtitle: 'Enter your Bluesky credentials below.<br>Uses an App Password (not your main password).',
     handleLabel: "Bluesky Handle",
     handlePlaceholder: "yourname.bsky.social",
@@ -66,7 +66,7 @@ const i18n = {
     msgFail: "Connection failed: ",
     msgUnknown: "Unknown error",
     // Advanced
-    advancedTitle: "⚙ Advanced — DOM Selectors",
+    advancedTitle: "Advanced — DOM Selectors",
     advancedDesc: "Update selectors if X changes its DOM structure.",
     selPostButton: "Post Button",
     selTextarea: "Textarea (${n} = index)",
@@ -112,9 +112,11 @@ function applyLanguage() {
   });
 }
 
-// DEFAULT_SELECTORS is provided by shared.js (loaded before this file).
+// DEFAULT_SELECTORS and renderIcons are provided by shared.js (loaded before this file).
 
 const SELECTOR_KEYS = Object.keys(DEFAULT_SELECTORS);
+
+renderIcons();
 
 // ─── DOM References ──────────────────────────────────────
 

@@ -68,6 +68,7 @@
     toast.id = "xtobsky-toast";
     toast.className = `xtobsky-toast ${isError ? "xtobsky-toast--error" : "xtobsky-toast--success"}`;
     toast.textContent = message;
+    if (!isError) toast.appendChild(createIcon("check"));
     document.body.appendChild(toast);
 
     requestAnimationFrame(() => toast.classList.add("xtobsky-toast--visible"));
@@ -372,8 +373,8 @@
         if (res && res.ok) {
           const msg =
             res.postCount > 1
-              ? `Bluesky: posted thread (${res.postCount} posts) ✓`
-              : "Bluesky: posted ✓";
+              ? `Bluesky: posted thread (${res.postCount} posts)`
+              : "Bluesky: posted";
           showToast(msg);
         } else {
           showToast(`Bluesky: ${res?.error || "unknown error"}`, true);
@@ -394,7 +395,7 @@
 
     const badge = document.createElement("span");
     badge.className = "xtobsky-badge";
-    badge.textContent = "🦋";
+    badge.appendChild(createIcon("butterfly"));
     badge.title = "Bluesky crosspost: ON";
 
     button.style.position = "relative";
