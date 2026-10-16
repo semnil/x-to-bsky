@@ -91,7 +91,7 @@
   - `matches` パターンは x.com/twitter.com に限定
   - メッセージは保存済み認証情報を使用した Bluesky API アクションのみをトリガー
   - **2026-04-12 更新**: `popup.js` が `chrome.runtime.sendMessage` を廃止し `chrome.storage.local` 直接読み取りに移行。`TOGGLE_CROSSPOST` メッセージと `chrome.tabs.sendMessage` が削除された。background.js に到達するメッセージは `POST_TO_BSKY` と `TEST_LOGIN` のみとなり、攻撃面が縮小した。
-- **推奨**: 多層防御として `sender.id === chrome.runtime.id` の検証を追加。
+- **判定**: 許容。送信元 (`sender.id`) の検証は追加しない。
 
 ### 4.2 コンテンツスクリプトからのスレッドデータを信頼 (LOW)
 
@@ -282,14 +282,6 @@
 
 ---
 
-## 推奨事項 (優先順)
-
-1. **`chrome.storage.session` の検討** — セッショントークンをストレージにキャッシュする場合に使用（ブラウザ終了時に消去）
-2. **`sender.id` 検証の追加** — `onMessage` ハンドラで多層防御として送信元を検証
-3. **AT Protocol の変更を監視** — Bluesky の新しい認証要件（DPoP/OAuth 移行等）への対応
-
----
-
 ## 10. 利用規約リスク分析
 
 ### 10.1 X (Twitter) — スクレイピング・自動化条項 (MEDIUM)
@@ -301,7 +293,7 @@
   - 「X Content」の再配布制限が、ユーザー自身のコンテンツの他プラットフォームへの投稿に適用される可能性
 - **評価**: ユーザー自身が作成したコンテンツを自身の操作で投稿する形態であり、完全自律型スクレイパーとは性質が異なる。個人ユーザー向けクロスポストツールに対して積極的な措置が取られる可能性は低いが、ToS 上のグレーゾーンは存在する。
 
-### 10.2 Bluesky — App Password 廃止予定 (LOW)
+### 10.2 Bluesky — App Password が制限されうる (LOW)
 
 - **関連条項**: Bluesky 開発者ガイドライン、OAuth 移行ブログ記事
 - **詳細**:
@@ -309,7 +301,7 @@
   - ユーザー操作起点の 1:1 投稿であり、スパムには該当しない
   - App Password は現在も動作するが、Bluesky は OAuth への移行を推奨しており、将来的に App Password が制限される可能性がある
   - Bot ラベル要件はユーザー自身のアカウントでの投稿には現時点で適用されない
-- **評価**: 最もリスクが低い。唯一の技術的懸念は App Password → OAuth 移行時期。
+- **評価**: 最もリスクが低い。唯一の技術的懸念は App Password → OAuth 移行時期。この拡張の認証は App Password のみで、OAuth には未対応。
 
 ### 10.3 リンクカード — OGP 画像再ホスティング (LOW-MEDIUM)
 
@@ -324,9 +316,5 @@
 | プラットフォーム | リスク | 主な懸念 |
 |-----------------|--------|---------|
 | X (Twitter) | MEDIUM | スクレイピング禁止の広範な解釈 |
-| Bluesky | LOW | App Password 廃止予定 |
+| Bluesky | LOW | App Password が制限されうる |
 | リンク先サイト | LOW-MEDIUM | OGP 画像再ホスティング |
-
-**推奨対応**:
-1. Bluesky OAuth 移行 — App Password 廃止に備えて中期的に対応計画を持つ
-2. README に免責事項 — 各プラットフォームの ToS に基づくリスクをユーザーに開示（対応済み）
