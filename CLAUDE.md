@@ -38,10 +38,18 @@ x-to-bsky/
 
 ### データフロー
 
-```
-[x.com compose area] → content.js (capture phase click) → chrome.runtime.sendMessage
-  → background.js → AT Protocol (bsky.social) → createRecord → response
-  → content.js → toast notification
+```mermaid
+sequenceDiagram
+    participant X as x.com compose area
+    participant C as content.js
+    participant B as background.js
+    participant P as AT Protocol (bsky.social)
+    X->>C: capture phase click
+    C->>B: chrome.runtime.sendMessage
+    B->>P: createRecord
+    P-->>B: response
+    B-->>C: response
+    C->>X: toast notification
 ```
 
 ### content.js
@@ -75,7 +83,7 @@ x-to-bsky/
 
 - `segmentGraphemes(text)` / `countGraphemes(text)`: `Intl.Segmenter` による正確な grapheme 単位処理
 - `splitText(text)`: 300 grapheme 超のテキストを改行・スペースで自動分割。URL 内部でのハードカットを防止
-- `shortenUrlsInText(text)`: 300 grapheme 超のテキストに含まれる URL を省略表示に変換。`https://` 除去 + パス切り詰め (`...`) で公式 Bluesky アプリと同等の表示。`{ text, urlEntries }` を返す
+- `shortenUrlsInText(text)`: 300 grapheme 超のテキストに含まれる URL を省略表示に変換。`http(s)://` を除去し、`URL_DISPLAY_LIMIT` grapheme を超える分を `...` に置き換える。`{ text, urlEntries }` を返す
 - `buildShortenedUrlFacets(text, urlEntries)`: 省略表示 URL の facet を生成。`uri` に原文 URL を保持
 - `parseFacets(text)`: lookbehind 不使用。`(^|\s)` でバウンダリ判定し offset 補正
 - `extractFirstUrl(text)`: テキスト中の最初の URL を検出 (末尾句読点除去)
@@ -84,7 +92,7 @@ x-to-bsky/
 ### 認証情報の保存
 
 - `chrome.storage.local` に `bskyHandle`, `bskyAppPassword`, `crosspostEnabled`, `customSelectors`, `includeQuoteUrl`, `postReplies`, `includeLinkCard`, `linkCardThumbnail` を保存
-- App Password を使用（メインパスワードではない）
+- App Password を使用（メインパスワードではない。OAuth は未使用）
 - `host_permissions`: `bsky.social`, `*.bsky.network`
 - `optional_host_permissions`: `<all_urls>` — 設定画面でリンクカード機能を有効化した時点でウェブアクセス権限を一括付与。無効化すると自動解除。background.js は投稿時に `hasHostPermission()` で権限チェックし、未許可ドメインはカードなしで投稿
 
@@ -97,8 +105,7 @@ x-to-bsky/
 ## 既知の制限
 
 - **画像キャプチャ**: canvas 経由のため、cross-origin 画像 (pbs.twimg.com 等) は tainted canvas で取得失敗する場合がある。blob: URL (ローカル添付) は問題なし
-- **動画非対応**: Bluesky の動画投稿 API が安定したら対応を検討
-- **長い URL**: 300 grapheme を超える percent-encoded URL は公式 Bluesky アプリと同様に省略表示 (`https://` 除去 + パス切り詰め `...`) に変換。facet URI に原文 URL を保持しクリック可能
+- **長い URL**: 300 grapheme を超えるテキストに含まれる URL は省略表示 (`http(s)://` 除去 + `URL_DISPLAY_LIMIT` grapheme を超える分を `...` に置換) に変換。facet URI に原文 URL を保持しクリック可能
 - **スレッド**: X の「+」ボタンで複数ポストを一度に作成した場合のみ Bluesky でも reply chain として投稿される。既存ポストへの返信によるスレッド追加は、対応する Bluesky 側の親ポストを特定できないため未対応
 - **引用 RT**: デフォルトではコメントテキストのみ投稿される。設定画面の「投稿オプション」で有効化すると、引用元ポストの X リンクをテキスト末尾に追加可能
 - **リプライ**: 既存ポストへの返信はデフォルトで Bluesky にクロスポストされない。設定画面の「投稿オプション」で「リプライを Bluesky にポストする」を有効化すると、返信テキストも独立した新規ポストとしてクロスポストされる (Bluesky 側の reply chain にはならず、X の返信先とも紐づかない)
@@ -132,9 +139,3 @@ chmod +x build.sh
 版上げ PR (manifest.json の `version` / `version_name` だけを変える PR) のマージがリリースになる。master への push で CI が成功すると `.github/workflows/tag-release.yaml` が走り、`tools/tag-plan.sh` がその commit と親の manifest.json を比べる。版 (`version_name` があればそれ、無ければ `version`) が動いていれば `v<版>` タグをその commit に付けて push し、そのタグの上で `release.yaml` を起動する。版が動いていない push では何もしない。同じ名前のタグが別の commit にあれば失敗し、タグは動かさない。
 
 `.github/workflows/release.yaml` はタグの上の run (タグの push、またはタグの上での `workflow_dispatch`) でリリースする。CI と同じテストの後に `build.sh` で zip を作り、アップロード後にダウンロードした zip のファイル名と sha256 を照合してから、zip を添付した draft Release を作る。ブランチの上の手動起動では照合まで行い、Release は作らない。プレリリースのタグは manifest.json の `version_name` と一致させる。
-
-## 関連コンテキスト
-
-- claude-voice 拡張の開発経験あり (Manifest V3, MutationObserver, content script パターン)
-- check-handle プロジェクトで Playwright + DOM セレクタ探索の経験あり
-- Bluesky AT Protocol の認証は App Password 方式 (OAuth は未使用)
