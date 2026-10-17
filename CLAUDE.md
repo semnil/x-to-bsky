@@ -71,12 +71,13 @@ sequenceDiagram
 
 - `createSession()`: 認証 + セッションキャッシュ。401 時の明確なエラーメッセージ
 - `resolveMentionFacets()`: メンション handle → DID 解決
-- `uploadImage(base64, mimeType)`: `com.atproto.repo.uploadBlob` で画像アップロード
+- `uploadImage(base64Data, mimeType, accessJwt)`: `com.atproto.repo.uploadBlob` で画像アップロード
 - `fetchOgpMetadata(url)`: 任意 URL から OGP メタデータ取得 (head のみストリーム読み取り)
-- `uploadThumbnail(url, jwt)`: 画像 URL をダウンロードして Bluesky にアップロード。1MB 超の画像は `downscaleToJpeg` で縮小してから送信 (Bluesky lexicon の `embed.external.thumb` 上限が 1,000,000 バイトのため)
-- `downscaleToJpeg(bytes, contentType)`: `createImageBitmap` + `OffscreenCanvas` + `convertToBlob` で 1000px 以下にリサイズ + JPEG 再エンコード (quality 0.85→0.4 と段階的に低下)。Service Worker でも動作。1MB に収まらない場合は null を返しサムネイルなしでフォールバック
-- `buildLinkEmbed(url, jwt)`: リンクカード (`app.bsky.embed.external`) 構築。OGP メタデータからタイトル・説明・サムネイルを取得
-- `createPost(text, images, parent, root)`: 画像 embed / リンクカード / reply chain 対応
+- `uploadThumbnail(imageUrl, accessJwt)`: 画像 URL をダウンロードして Bluesky にアップロード。1MB 超の画像は `downscaleToJpeg` で縮小してから送信 (Bluesky lexicon の `embed.external.thumb` 上限が 1,000,000 バイトのため)
+- `downscaleToJpeg(buf, contentType)`: `createImageBitmap` + `OffscreenCanvas` + `convertToBlob` で 1000px 以下にリサイズ + JPEG 再エンコード (quality 0.85→0.4 と段階的に低下)。Service Worker でも動作。1MB に収まらない場合は null を返しサムネイルなしでフォールバック
+- `fetchYouTubeOEmbed(videoUrl)`: YouTube oEmbed からタイトル・投稿者・サムネイル URL を取得
+- `buildLinkEmbed(url, accessJwt, includeThumbnail = true)`: リンクカード (`app.bsky.embed.external`) 構築。YouTube の URL (`YOUTUBE_RE`) は oEmbed、それ以外は OGP メタデータからタイトル・説明・サムネイルを取得。`includeThumbnail` が false ならサムネイルを付けない
+- `createPost(text, images, parent, root, sess, urlEntries)`: 画像 embed / リンクカード / reply chain 対応。`sess` はスレッド内で使い回すセッション、`urlEntries` は `shortenUrlsInText` の省略 URL 一覧
 - `postThread(thread)`: URL 省略 + 自動分割 + reply chain によるスレッド投稿
 - メッセージハンドラ: `POST_TO_BSKY`, `TEST_LOGIN`, `GET_STATUS`
 
