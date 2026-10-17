@@ -12,9 +12,9 @@ x-to-bsky/
 ├── manifest.json        # Manifest V3 設定
 ├── background.js        # Service worker: Bluesky API (認証・投稿・画像・スレッド)
 ├── lib.js               # 純粋関数 (grapheme処理・テキスト分割・facet解析・URL検出・URL省略)
-├── shared.js            # content.js / options.js 共有定数 (DEFAULT_SELECTORS)
+├── shared.js            # content.js / options.js / popup.js 共有の定数とアイコン (DEFAULT_SELECTORS・createIcon・renderIcons)
 ├── content.js           # x.com 上のコンテンツスクリプト (投稿・画像・スレッドフック)
-├── content.css          # トースト通知・🦋バッジのスタイル
+├── content.css          # トースト通知・バッジ・アイコンのスタイル
 ├── popup.html           # ツールバーポップアップ UI
 ├── popup.js             # ポップアップロジック (トグル ON/OFF)
 ├── options.html         # 設定画面 UI (認証・セレクタ設定)
@@ -24,6 +24,7 @@ x-to-bsky/
 ├── .github/workflows/   # GitHub Actions ワークフロー
 ├── build.sh             # zip パッケージング
 ├── test/lib.test.js     # Vitest 単体テスト (lib.js)
+├── test/icons.test.js   # Vitest: UI ファイルに絵文字が無く、使うアイコン名が shared.js にあること
 ├── test/release.test.js # Vitest: Release / Tag release ワークフローの構成と tools/ のスクリプト
 ├── tools/check-tag.sh   # Release: タグ上の run かどうかとタグ名からリリースの可否を判定
 ├── tools/tag-plan.sh    # Tag release: master の commit が版を動かしたときに付けるタグを出力
@@ -61,8 +62,8 @@ sequenceDiagram
 - 画像抽出: textarea 近傍の `<img>` を canvas 経由で base64 キャプチャ (同期処理)。`object-fit: cover` の画像は `getVisibleRect()` で表示領域のみをクロップしてキャプチャ。キャプチャ結果に `width`/`height` を含め、AT Protocol `aspectRatio` フィールドとして Bluesky に送信
 - フォールバック: `.DraftEditor-root [data-text="true"]`
 - リプライ判定: `isReplyContext()` で既存ポストへの返信かを検出 (モーダルは返信先ツイート `[data-testid="tweet"]` の有無で判定、引用 RT は除外。`/status/` ページのインライン compose は返信とみなす)。`postReplies` が OFF (デフォルト) の場合は返信をクロスポストしない
-- 投稿ボタンに 🦋 バッジを MutationObserver で動的付与。クロスポストが ON かつ認証設定済みのときだけ表示し、`crosspostEnabled` / `bskyHandle` / `customSelectors` の変更時に既存ボタンのバッジも付け外しする
-- トースト通知で Bluesky 投稿結果を表示 (成功: 青, 失敗: 赤, スレッド件数表示)
+- 投稿ボタンに蝶の SVG アイコン (`createIcon("butterfly")`) のバッジを MutationObserver で動的付与。クロスポストが ON かつ認証設定済みのときだけ表示し、`crosspostEnabled` / `bskyHandle` / `customSelectors` の変更時に既存ボタンのバッジも付け外しする
+- トースト通知で Bluesky 投稿結果を表示 (成功: 青 + チェックの SVG アイコン, 失敗: 赤, スレッド件数表示)
 - 初期状態読み込み: `chrome.storage.local.get` で直接読み込み (SW 起動不要)。`storage.onChanged` で全設定をリアルタイム同期
 - Service worker 起動: `sendMessageWithWakeup()` で `GET_STATUS` ping 後に本メッセージ送信。1秒タイムアウトのフォールバック付き。非冪等メッセージはリトライしない
 - 拡張コンテキスト無効化ガード: `chrome.runtime?.id` チェックでリロード後のサイレント失敗を防止

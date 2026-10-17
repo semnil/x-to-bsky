@@ -223,7 +223,7 @@
 - **場所**: `content.js:syncBadges()`, `content.js:removeBadges()`, `content.js` の `storage.onChanged` リスナー
 - **変更内容**: クロスポストが ON かつ認証設定済みのときだけ投稿ボタンにバッジを付け、それ以外では全バッジを外す。`crosspostEnabled`・`bskyHandle`・`customSelectors` の変更時と初期読み込み時に既存ボタンへ反映する。OFF 用のバッジ (`.xtobsky-badge--off`) は廃止。
 - **評価**:
-  - **DOM 挿入**: バッジは `textContent` に固定文字列を設定した `span` のみ。ページ由来の値を DOM に書き込む経路はない。
+  - **DOM 挿入**: バッジは `createIcon()` (shared.js) が `createElementNS` で組み立てる SVG を入れた `span` のみ。パスデータは shared.js の固定の定数で、ページ由来の値を DOM に書き込む経路はない。成功トーストのチェックアイコンも同じ `createIcon()` で作る。
   - **DOM 削除**: `removeBadges()` が削除するのは `.xtobsky-badge` クラスの要素のみで、X 側の要素には触れない。
   - **権限**: 追加の権限・通信はない。
 
@@ -276,7 +276,7 @@
 | 6.2 | ストレージ直接読み取り移行 (newValue=undefined / get失敗 / レース) | INFO | 問題なし — 詳細は §6.2 参照 |
 | 6.3 | URL 省略表示と facet URI 分離 (text/facet の値が異なる) | INFO | 問題なし — 詳細は §6.3 参照 |
 | 6.5 | リンクカード外部通信 | LOW-MEDIUM | デフォルト無効、optional_host_permissions |
-| 6.6 | 投稿ボタンのバッジ表示の状態同期 (固定文字列の挿入・自クラスのみ削除) | INFO | 問題なし — 詳細は §6.6 参照 |
+| 6.6 | 投稿ボタンのバッジ表示の状態同期 (固定 SVG の挿入・自クラスのみ削除) | INFO | 問題なし — 詳細は §6.6 参照 |
 
 **CRITICAL または HIGH の所見なし。**
 

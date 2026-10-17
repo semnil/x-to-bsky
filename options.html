@@ -21,6 +21,17 @@
       font-size: 22px;
       font-weight: 700;
       margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .title-icon {
+      display: inline-flex;
+      color: #0085ff;
+    }
+    .title-icon .xtobsky-icon {
+      width: 22px;
+      height: 22px;
     }
     h2 {
       font-size: 17px;
@@ -183,6 +194,12 @@
     details.advanced summary:hover {
       color: #e7e9ea;
     }
+    .summary-icon .xtobsky-icon {
+      width: 1em;
+      height: 1em;
+      margin-right: 4px;
+      vertical-align: -0.125em;
+    }
     details.advanced .advanced-body {
       margin-top: 12px;
     }
@@ -200,7 +217,7 @@
 </head>
 <body>
   <div class="container">
-    <h1 data-i18n="title">🦋 X to Bluesky — 設定</h1>
+    <h1><span class="title-icon" data-icon="butterfly"></span><span data-i18n="title">X to Bluesky — 設定</span></h1>
     <p class="subtitle" data-i18n-html="subtitle">
       Bluesky の認証情報を入力してください。<br>
       App Password を使用します（メインパスワードは使用しません）。
@@ -288,7 +305,7 @@
 
     <!-- ─── Advanced: DOM Selectors ─── -->
     <details class="advanced">
-      <summary data-i18n="advancedTitle">⚙ 高度な設定 — DOM セレクタ</summary>
+      <summary><span class="summary-icon" data-icon="gear"></span><span data-i18n="advancedTitle">高度な設定 — DOM セレクタ</span></summary>
       <div class="advanced-body">
         <p class="hint" style="margin-bottom: 12px;" data-i18n="advancedDesc">
           X の DOM 構造が変更された場合にセレクタを更新できます。

@@ -19,6 +19,14 @@
       align-items: center;
       gap: 6px;
     }
+    .title-icon {
+      display: inline-flex;
+      color: #0085ff;
+    }
+    .title-icon .xtobsky-icon {
+      width: 16px;
+      height: 16px;
+    }
     .status {
       font-size: 13px;
       color: #71767b;
@@ -93,7 +101,7 @@
   </style>
 </head>
 <body>
-  <h1>🦋 X → Bluesky</h1>
+  <h1><span class="title-icon" data-icon="butterfly"></span>X → Bluesky</h1>
 
   <div id="not-configured" class="not-configured" style="display:none;">
     未設定。設定画面で Bluesky 認証情報を入力してください。
@@ -113,6 +121,7 @@
 
   <a id="settings-link" class="settings-link">設定を開く</a>
 
+  <script src="shared.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

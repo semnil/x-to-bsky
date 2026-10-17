@@ -32,13 +32,24 @@
   background-color: #d32f2f;
 }
 
+.xtobsky-toast .xtobsky-icon {
+  width: 1em;
+  height: 1em;
+  margin-left: 4px;
+  vertical-align: -0.125em;
+}
+
 .xtobsky-badge {
   position: absolute;
   top: -4px;
   right: -4px;
-  font-size: 12px;
-  line-height: 1;
+  line-height: 0;
+  color: #0085ff;
   pointer-events: none;
-  filter: saturate(1.2);
   transition: opacity 0.2s ease;
+}
+
+.xtobsky-badge .xtobsky-icon {
+  width: 14px;
+  height: 14px;
 }
