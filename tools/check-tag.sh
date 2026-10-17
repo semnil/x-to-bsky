@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# What a run is for. A run on a tag — pushed, or dispatched on the tag by
-# tag-release.yaml — is an intent to release, so the tag's name has to be one
+# What a run is for. A run on a tag — dispatched on the tag by tag-release.yaml
+# or by hand — is an intent to release, so the tag's name has to be one
 # this workflow makes a release from; a run on a branch makes none. A tag naming
 # no release is refused here: passed on, it produces a run that packs, uploads
 # and releases nothing, and reports success.

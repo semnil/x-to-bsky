@@ -1,11 +1,9 @@
 name: Release
 run-name: ${{ github.ref_name }} release build 🚀
 
+# Starts only by dispatch. tag-release.yaml dispatches it on the tag of a merged
+# version bump; pushing a tag by hand starts nothing.
 on:
-  push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
 
 # One group per ref, so a dispatch on a tag that is already building queues
