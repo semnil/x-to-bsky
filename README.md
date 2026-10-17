@@ -75,7 +75,7 @@ x-to-bsky/
 ├── options.html/js      # 設定画面 (認証・セレクタ)
 ├── icons/               # 拡張アイコン
 ├── build.sh             # zip パッケージング
-├── SECURITY_AUDIT.md    # セキュリティ監査レポート
+├── docs/security-audit.md # セキュリティ監査レポート
 └── README.md
 ```
 
@@ -85,7 +85,7 @@ x-to-bsky/
 - 通信先は `bsky.social` のみ (リンクカード有効時は対象 URL の OGP メタデータ・サムネイルも取得)
 - App Password は Bluesky の設定からいつでも無効化可能
 - ソースコードは全ファイル公開。第三者依存なし
-- 詳細は [SECURITY_AUDIT.md](SECURITY_AUDIT.md) を参照
+- 詳細は [docs/security-audit.md](docs/security-audit.md) を参照
 
 ## 既知の制限
 
@@ -106,4 +106,4 @@ x-to-bsky/
 - **Bluesky**: 現在 App Password による認証を使用していますが、Bluesky は OAuth への移行を推奨しています。将来的に App Password が制限される可能性があります。
 - **リンクカード**: リンクカード生成時に対象サイトの OGP メタデータおよびサムネイル画像を取得し Bluesky にアップロードします。サムネイル画像の再ホスティングは各サイトの利用規約に抵触する可能性がありますが、リンクプレビュー生成として広く行われている慣行です。
 
-本拡張の使用は自己責任で行ってください。各プラットフォームの利用規約を確認し、リスクを理解した上でご利用ください。詳細は [SECURITY_AUDIT.md](SECURITY_AUDIT.md) の「利用規約リスク分析」セクションを参照してください。
+本拡張の使用は自己責任で行ってください。各プラットフォームの利用規約を確認し、リスクを理解した上でご利用ください。詳細は [docs/security-audit.md](docs/security-audit.md) の「利用規約リスク分析」セクションを参照してください。
