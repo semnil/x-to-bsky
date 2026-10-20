@@ -12,7 +12,7 @@ x-to-bsky/
 ├── manifest.json        # Manifest V3 configuration
 ├── background.js        # Service worker: Bluesky API (auth, posting, images, threads)
 ├── lib.js               # Pure functions (grapheme handling, text splitting, facet parsing, URL detection, URL shortening)
-├── shared.js            # Constants, icons and page language shared by content.js / options.js / popup.js (DEFAULT_SELECTORS, createIcon, renderIcons, UI_LANG, translate, applyMessages)
+├── shared.js            # Constants, icons and page language shared by content.js / options.js / popup.js (DEFAULT_SELECTORS, createIcon, renderIcons, UI_LANG, translate, applyMessages, ERROR_MESSAGES, errorText)
 ├── content.js           # Content script on x.com (post, image and thread hooks)
 ├── content.css          # Styles for the toast notification, badge and icons
 ├── popup.html           # Toolbar popup UI
@@ -25,7 +25,7 @@ x-to-bsky/
 ├── build.sh             # zip packaging
 ├── test/lib.test.js     # Vitest unit tests (lib.js)
 ├── test/icons.test.js   # Vitest: the UI files contain no emoji, and the icon names they use exist in shared.js
-├── test/i18n.test.js    # Vitest: popup.html / options.html use only keys that exist in Japanese and English, and show Japanese only as the fallback of translated elements
+├── test/i18n.test.js    # Vitest: popup.html / options.html / content.js use only messages that exist in Japanese and English, the pages show Japanese only as the fallback of translated elements, and every error code thrown in background.js has a message
 ├── test/release.test.js # Vitest: structure of the Release / Tag release workflows and the scripts in tools/
 ├── tools/check-tag.sh   # Release: decides whether to release from whether the run is on a tag and from the tag name
 ├── tools/tag-plan.sh    # Tag release: prints the tag to put on a master commit that moved the version
@@ -64,7 +64,7 @@ sequenceDiagram
 - Fallback: `.DraftEditor-root [data-text="true"]`
 - Reply detection: `isReplyContext()` detects whether the post is a reply to an existing post (in the modal, by the presence of the replied-to tweet `[data-testid="tweet"]`, with quote reposts excluded; the inline compose on a `/status/` page counts as a reply). When `postReplies` is OFF (the default), replies are not cross-posted
 - A badge with the butterfly SVG icon (`createIcon("butterfly")`) is added to the post buttons dynamically with a MutationObserver. It is shown only when crossposting is ON and credentials are set, and the badges on existing buttons are also added or removed when `crosspostEnabled` / `bskyHandle` / `customSelectors` change
-- A toast notification shows the result of the Bluesky post (success: blue + check SVG icon, failure: red, with the number of thread posts)
+- A toast notification shows the result of the Bluesky post (success: blue + check SVG icon, failure: red, with the number of thread posts). The toast texts and the badge title are in Japanese or English by `UI_LANG`, and an error from background.js is shown with `errorText()`
 - Initial state: read directly with `chrome.storage.local.get` (no service worker startup needed). `storage.onChanged` keeps every setting in sync in real time
 - Service worker startup: `sendMessageWithWakeup()` pings with `GET_STATUS` before sending the actual message. Has a 1-second timeout fallback. Non-idempotent messages are not retried
 - Extension context invalidation guard: a `chrome.runtime?.id` check prevents silent failures after a reload
@@ -72,6 +72,7 @@ sequenceDiagram
 ### background.js
 
 - `createSession()`: authentication + session cache. A clear error message on 401
+- Errors are thrown as `CodedError` with a `code` and the API's reason as `detail`, and a failed response carries both. The extension pages turn them into Japanese or English text with `ERROR_MESSAGES` in shared.js
 - `resolveMentionFacets()`: resolves mention handles → DIDs
 - `uploadImage(base64Data, mimeType, accessJwt)`: uploads an image with `com.atproto.repo.uploadBlob`
 - `fetchOgpMetadata(url)`: fetches OGP metadata from any URL (stream-reads only the head)
