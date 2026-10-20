@@ -91,28 +91,11 @@ const i18n = {
   },
 };
 
-// Detect browser language
-const currentLang = navigator.language.startsWith("ja") ? "ja" : "en";
-
 function t(key) {
-  return i18n[currentLang][key] || i18n.en[key] || key;
+  return translate(i18n, key);
 }
 
-function applyLanguage() {
-  document.documentElement.lang = currentLang;
-
-  document.querySelectorAll("[data-i18n]").forEach((el) => {
-    el.textContent = t(el.dataset.i18n);
-  });
-  document.querySelectorAll("[data-i18n-html]").forEach((el) => {
-    el.innerHTML = t(el.dataset.i18nHtml);
-  });
-  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
-    el.placeholder = t(el.dataset.i18nPlaceholder);
-  });
-}
-
-// DEFAULT_SELECTORS and renderIcons are provided by shared.js (loaded before this file).
+// DEFAULT_SELECTORS, renderIcons, translate and applyMessages are provided by shared.js (loaded before this file).
 
 const SELECTOR_KEYS = Object.keys(DEFAULT_SELECTORS);
 
@@ -166,7 +149,7 @@ chrome.storage.local.get(
         chrome.storage.local.set({ includeLinkCard: false });
       }
       updateLinkCardSubToggle();
-      applyLanguage();
+      applyMessages(i18n);
     });
   }
 );

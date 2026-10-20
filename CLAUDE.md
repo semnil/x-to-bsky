@@ -12,11 +12,11 @@ x-to-bsky/
 ├── manifest.json        # Manifest V3 configuration
 ├── background.js        # Service worker: Bluesky API (auth, posting, images, threads)
 ├── lib.js               # Pure functions (grapheme handling, text splitting, facet parsing, URL detection, URL shortening)
-├── shared.js            # Constants and icons shared by content.js / options.js / popup.js (DEFAULT_SELECTORS, createIcon, renderIcons)
+├── shared.js            # Constants, icons and page language shared by content.js / options.js / popup.js (DEFAULT_SELECTORS, createIcon, renderIcons, UI_LANG, translate, applyMessages)
 ├── content.js           # Content script on x.com (post, image and thread hooks)
 ├── content.css          # Styles for the toast notification, badge and icons
 ├── popup.html           # Toolbar popup UI
-├── popup.js             # Popup logic (ON/OFF toggle)
+├── popup.js             # Popup logic (ON/OFF toggle, i18n)
 ├── options.html         # Options page UI (credentials, selector settings)
 ├── options.js           # Options logic (credentials, selectors, i18n)
 ├── icons/               # 16/48/128px PNG
@@ -25,6 +25,7 @@ x-to-bsky/
 ├── build.sh             # zip packaging
 ├── test/lib.test.js     # Vitest unit tests (lib.js)
 ├── test/icons.test.js   # Vitest: the UI files contain no emoji, and the icon names they use exist in shared.js
+├── test/i18n.test.js    # Vitest: popup.html / options.html use only keys that exist in Japanese and English, and show Japanese only as the fallback of translated elements
 ├── test/release.test.js # Vitest: structure of the Release / Tag release workflows and the scripts in tools/
 ├── tools/check-tag.sh   # Release: decides whether to release from whether the run is on a tag and from the tag name
 ├── tools/tag-plan.sh    # Tag release: prints the tag to put on a master commit that moved the version
