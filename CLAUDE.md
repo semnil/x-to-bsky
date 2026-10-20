@@ -1,44 +1,44 @@
 # CLAUDE.md — X to Bluesky Crossposter
 
-## プロジェクト概要
+## Project overview
 
-X (Twitter) の投稿ボタンをフックし、同じテキストを Bluesky に同時投稿する Chrome 拡張 (Manifest V3)。
-外部依存ゼロ、全ファイル自作。API キー不要（X 側は DOM フック、Bluesky 側は AT Protocol 直接通信）。
+A Chrome extension (Manifest V3) that hooks the X (Twitter) post button and posts the same text to Bluesky at the same time.
+Zero external dependencies; every file is written from scratch. No API keys needed (the X side is a DOM hook, the Bluesky side talks the AT Protocol directly).
 
-## リポジトリ構成
+## Repository layout
 
 ```
 x-to-bsky/
-├── manifest.json        # Manifest V3 設定
-├── background.js        # Service worker: Bluesky API (認証・投稿・画像・スレッド)
-├── lib.js               # 純粋関数 (grapheme処理・テキスト分割・facet解析・URL検出・URL省略)
-├── shared.js            # content.js / options.js / popup.js 共有の定数とアイコン (DEFAULT_SELECTORS・createIcon・renderIcons)
-├── content.js           # x.com 上のコンテンツスクリプト (投稿・画像・スレッドフック)
-├── content.css          # トースト通知・バッジ・アイコンのスタイル
-├── popup.html           # ツールバーポップアップ UI
-├── popup.js             # ポップアップロジック (トグル ON/OFF)
-├── options.html         # 設定画面 UI (認証・セレクタ設定)
-├── options.js           # 設定ロジック (認証・セレクタ・i18n)
+├── manifest.json        # Manifest V3 configuration
+├── background.js        # Service worker: Bluesky API (auth, posting, images, threads)
+├── lib.js               # Pure functions (grapheme handling, text splitting, facet parsing, URL detection, URL shortening)
+├── shared.js            # Constants and icons shared by content.js / options.js / popup.js (DEFAULT_SELECTORS, createIcon, renderIcons)
+├── content.js           # Content script on x.com (post, image and thread hooks)
+├── content.css          # Styles for the toast notification, badge and icons
+├── popup.html           # Toolbar popup UI
+├── popup.js             # Popup logic (ON/OFF toggle)
+├── options.html         # Options page UI (credentials, selector settings)
+├── options.js           # Options logic (credentials, selectors, i18n)
 ├── icons/               # 16/48/128px PNG
-├── _locales/            # 拡張名・説明の ja / en メッセージ (manifest.json の __MSG_*__)
-├── .github/workflows/   # GitHub Actions ワークフロー
-├── build.sh             # zip パッケージング
-├── test/lib.test.js     # Vitest 単体テスト (lib.js)
-├── test/icons.test.js   # Vitest: UI ファイルに絵文字が無く、使うアイコン名が shared.js にあること
-├── test/release.test.js # Vitest: Release / Tag release ワークフローの構成と tools/ のスクリプト
-├── tools/check-tag.sh   # Release: タグ上の run かどうかとタグ名からリリースの可否を判定
-├── tools/tag-plan.sh    # Tag release: master の commit が版を動かしたときに付けるタグを出力
-├── tools/verify-version.sh # Release: タグと manifest.json の version / version_name の一致確認
+├── _locales/            # ja / en messages for the extension name and description (__MSG_*__ in manifest.json)
+├── .github/workflows/   # GitHub Actions workflows
+├── build.sh             # zip packaging
+├── test/lib.test.js     # Vitest unit tests (lib.js)
+├── test/icons.test.js   # Vitest: the UI files contain no emoji, and the icon names they use exist in shared.js
+├── test/release.test.js # Vitest: structure of the Release / Tag release workflows and the scripts in tools/
+├── tools/check-tag.sh   # Release: decides whether to release from whether the run is on a tag and from the tag name
+├── tools/tag-plan.sh    # Tag release: prints the tag to put on a master commit that moved the version
+├── tools/verify-version.sh # Release: checks that the tag matches version / version_name in manifest.json
 ├── package.json         # dev dependencies (vitest)
-├── docs/security-audit.md # セキュリティ監査レポート
-├── PRIVACY_POLICY.md    # プライバシーポリシー (EN。JA は PRIVACY_POLICY_JA.md)
-├── README.md            # セットアップ手順・仕様説明
-└── CLAUDE.md            # このファイル
+├── docs/security-audit.md # Security audit report (English only)
+├── PRIVACY_POLICY.md    # Privacy policy (EN; JA is PRIVACY_POLICY_JA.md)
+├── README.md            # Setup steps and description of the behavior (EN; JA is README.ja.md)
+└── CLAUDE.md            # This file
 ```
 
-## アーキテクチャ
+## Architecture
 
-### データフロー
+### Data flow
 
 ```mermaid
 sequenceDiagram
@@ -56,90 +56,98 @@ sequenceDiagram
 
 ### content.js
 
-- `document.addEventListener("click", handler, true)` で capture phase フック
-- セレクタはデフォルト定義 + `chrome.storage.local.customSelectors` で上書き可能
-- テキスト抽出: `tweetTextarea_${n}` を 0 からインクリメントしてスレッド全体を取得
-- 画像抽出: textarea 近傍の `<img>` を canvas 経由で base64 キャプチャ (同期処理)。`object-fit: cover` の画像は `getVisibleRect()` で表示領域のみをクロップしてキャプチャ。キャプチャ結果に `width`/`height` を含め、AT Protocol `aspectRatio` フィールドとして Bluesky に送信
-- フォールバック: `.DraftEditor-root [data-text="true"]`
-- リプライ判定: `isReplyContext()` で既存ポストへの返信かを検出 (モーダルは返信先ツイート `[data-testid="tweet"]` の有無で判定、引用 RT は除外。`/status/` ページのインライン compose は返信とみなす)。`postReplies` が OFF (デフォルト) の場合は返信をクロスポストしない
-- 投稿ボタンに蝶の SVG アイコン (`createIcon("butterfly")`) のバッジを MutationObserver で動的付与。クロスポストが ON かつ認証設定済みのときだけ表示し、`crosspostEnabled` / `bskyHandle` / `customSelectors` の変更時に既存ボタンのバッジも付け外しする
-- トースト通知で Bluesky 投稿結果を表示 (成功: 青 + チェックの SVG アイコン, 失敗: 赤, スレッド件数表示)
-- 初期状態読み込み: `chrome.storage.local.get` で直接読み込み (SW 起動不要)。`storage.onChanged` で全設定をリアルタイム同期
-- Service worker 起動: `sendMessageWithWakeup()` で `GET_STATUS` ping 後に本メッセージ送信。1秒タイムアウトのフォールバック付き。非冪等メッセージはリトライしない
-- 拡張コンテキスト無効化ガード: `chrome.runtime?.id` チェックでリロード後のサイレント失敗を防止
+- Hooks the capture phase with `document.addEventListener("click", handler, true)`
+- Selectors are the default definitions, overridable through `chrome.storage.local.customSelectors`
+- Text extraction: increments `tweetTextarea_${n}` from 0 to get the whole thread
+- Image extraction: captures the `<img>` elements near the textarea as base64 through a canvas (synchronous). Images with `object-fit: cover` are cropped to the visible area with `getVisibleRect()` before capture. The capture result includes `width`/`height`, which are sent to Bluesky as the AT Protocol `aspectRatio` field
+- Fallback: `.DraftEditor-root [data-text="true"]`
+- Reply detection: `isReplyContext()` detects whether the post is a reply to an existing post (in the modal, by the presence of the replied-to tweet `[data-testid="tweet"]`, with quote reposts excluded; the inline compose on a `/status/` page counts as a reply). When `postReplies` is OFF (the default), replies are not cross-posted
+- A badge with the butterfly SVG icon (`createIcon("butterfly")`) is added to the post buttons dynamically with a MutationObserver. It is shown only when crossposting is ON and credentials are set, and the badges on existing buttons are also added or removed when `crosspostEnabled` / `bskyHandle` / `customSelectors` change
+- A toast notification shows the result of the Bluesky post (success: blue + check SVG icon, failure: red, with the number of thread posts)
+- Initial state: read directly with `chrome.storage.local.get` (no service worker startup needed). `storage.onChanged` keeps every setting in sync in real time
+- Service worker startup: `sendMessageWithWakeup()` pings with `GET_STATUS` before sending the actual message. Has a 1-second timeout fallback. Non-idempotent messages are not retried
+- Extension context invalidation guard: a `chrome.runtime?.id` check prevents silent failures after a reload
 
 ### background.js
 
-- `createSession()`: 認証 + セッションキャッシュ。401 時の明確なエラーメッセージ
-- `resolveMentionFacets()`: メンション handle → DID 解決
-- `uploadImage(base64Data, mimeType, accessJwt)`: `com.atproto.repo.uploadBlob` で画像アップロード
-- `fetchOgpMetadata(url)`: 任意 URL から OGP メタデータ取得 (head のみストリーム読み取り)
-- `uploadThumbnail(imageUrl, accessJwt)`: 画像 URL をダウンロードして Bluesky にアップロード。1MB 超の画像は `downscaleToJpeg` で縮小してから送信 (Bluesky lexicon の `embed.external.thumb` 上限が 1,000,000 バイトのため)
-- `downscaleToJpeg(buf, contentType)`: `createImageBitmap` + `OffscreenCanvas` + `convertToBlob` で 1000px 以下にリサイズ + JPEG 再エンコード (quality 0.85→0.4 と段階的に低下)。Service Worker でも動作。1MB に収まらない場合は null を返しサムネイルなしでフォールバック
-- `fetchYouTubeOEmbed(videoUrl)`: YouTube oEmbed からタイトル・投稿者・サムネイル URL を取得
-- `buildLinkEmbed(url, accessJwt, includeThumbnail = true)`: リンクカード (`app.bsky.embed.external`) 構築。YouTube の URL (`YOUTUBE_RE`) は oEmbed、それ以外は OGP メタデータからタイトル・説明・サムネイルを取得。`includeThumbnail` が false ならサムネイルを付けない
-- `createPost(text, images, parent, root, sess, urlEntries)`: 画像 embed / リンクカード / reply chain 対応。`sess` はスレッド内で使い回すセッション、`urlEntries` は `shortenUrlsInText` の省略 URL 一覧
-- `postThread(thread)`: URL 省略 + 自動分割 + reply chain によるスレッド投稿
-- メッセージハンドラ: `POST_TO_BSKY`, `TEST_LOGIN`, `GET_STATUS`
+- `createSession()`: authentication + session cache. A clear error message on 401
+- `resolveMentionFacets()`: resolves mention handles → DIDs
+- `uploadImage(base64Data, mimeType, accessJwt)`: uploads an image with `com.atproto.repo.uploadBlob`
+- `fetchOgpMetadata(url)`: fetches OGP metadata from any URL (stream-reads only the head)
+- `uploadThumbnail(imageUrl, accessJwt)`: downloads an image URL and uploads it to Bluesky. Images over 1MB are shrunk with `downscaleToJpeg` before sending (because the Bluesky lexicon limits `embed.external.thumb` to 1,000,000 bytes)
+- `downscaleToJpeg(buf, contentType)`: resizes to 1000px or less with `createImageBitmap` + `OffscreenCanvas` + `convertToBlob` and re-encodes as JPEG (quality lowered step by step from 0.85 to 0.4). Works in a Service Worker too. Returns null when it cannot fit in 1MB, falling back to no thumbnail
+- `fetchYouTubeOEmbed(videoUrl)`: gets the title, author and thumbnail URL from YouTube oEmbed
+- `buildLinkEmbed(url, accessJwt, includeThumbnail = true)`: builds a link card (`app.bsky.embed.external`). YouTube URLs (`YOUTUBE_RE`) get the title, description and thumbnail from oEmbed, other URLs from OGP metadata. When `includeThumbnail` is false, no thumbnail is attached
+- `createPost(text, images, parent, root, sess, urlEntries)`: supports image embeds, link cards and the reply chain. `sess` is the session reused within a thread, `urlEntries` is the list of shortened URLs from `shortenUrlsInText`
+- `postThread(thread)`: thread posting with URL shortening + automatic splitting + reply chain
+- Message handlers: `POST_TO_BSKY`, `TEST_LOGIN`, `GET_STATUS`
 
 ### lib.js
 
-- `segmentGraphemes(text)` / `countGraphemes(text)`: `Intl.Segmenter` による正確な grapheme 単位処理
-- `splitText(text)`: 300 grapheme 超のテキストを改行・スペースで自動分割。URL 内部でのハードカットを防止
-- `shortenUrlsInText(text)`: 300 grapheme 超のテキストに含まれる URL を省略表示に変換。`http(s)://` を除去し、`URL_DISPLAY_LIMIT` grapheme を超える分を `...` に置き換える。`{ text, urlEntries }` を返す
-- `buildShortenedUrlFacets(text, urlEntries)`: 省略表示 URL の facet を生成。`uri` に原文 URL を保持
-- `parseFacets(text)`: lookbehind 不使用。`(^|\s)` でバウンダリ判定し offset 補正
-- `extractFirstUrl(text)`: テキスト中の最初の URL を検出 (末尾句読点除去)
-- `calcCoverRect(nw, nh, dw, dh, objectPosition)`: `object-fit: cover` 時の表示領域クロップ計算 (pure function; content.js の `getVisibleRect` と同一アルゴリズム)
+- `segmentGraphemes(text)` / `countGraphemes(text)`: exact per-grapheme handling with `Intl.Segmenter`
+- `splitText(text)`: splits text over 300 graphemes automatically at line breaks and spaces. Prevents hard cuts inside URLs
+- `shortenUrlsInText(text)`: converts the URLs in text over 300 graphemes to a shortened display. Removes `http(s)://` and replaces whatever exceeds `URL_DISPLAY_LIMIT` graphemes with `...`. Returns `{ text, urlEntries }`
+- `buildShortenedUrlFacets(text, urlEntries)`: generates the facets for shortened URLs. `uri` keeps the original URL
+- `parseFacets(text)`: no lookbehind. Detects boundaries with `(^|\s)` and corrects the offsets
+- `extractFirstUrl(text)`: finds the first URL in the text (removing trailing punctuation)
+- `calcCoverRect(nw, nh, dw, dh, objectPosition)`: computes the visible-area crop for `object-fit: cover` (pure function; the same algorithm as `getVisibleRect` in content.js)
 
-### 認証情報の保存
+### Credential storage
 
-- `chrome.storage.local` に `bskyHandle`, `bskyAppPassword`, `crosspostEnabled`, `customSelectors`, `includeQuoteUrl`, `postReplies`, `includeLinkCard`, `linkCardThumbnail` を保存
-- App Password を使用（メインパスワードではない。OAuth は未使用）
+- `bskyHandle`, `bskyAppPassword`, `crosspostEnabled`, `customSelectors`, `includeQuoteUrl`, `postReplies`, `includeLinkCard` and `linkCardThumbnail` are saved in `chrome.storage.local`
+- Uses an App Password (not the main password; OAuth is not used)
 - `host_permissions`: `bsky.social`, `*.bsky.network`
-- `optional_host_permissions`: `<all_urls>` — 設定画面でリンクカード機能を有効化した時点でウェブアクセス権限を一括付与。無効化すると自動解除。background.js は投稿時に `hasHostPermission()` で権限チェックし、未許可ドメインはカードなしで投稿
+- `optional_host_permissions`: `<all_urls>` — web access permission is granted all at once when the link card feature is enabled on the options page, and removed automatically when it is disabled. background.js checks the permission with `hasHostPermission()` at posting time and posts without a card for domains that are not permitted
 
-## コーディング規約
+## Coding conventions
 
-- 外部ライブラリ・ビルドツール不使用。生 JS のみ
-- セミコロンあり、ダブルクォート不統一（manifest は JSON 標準）
-- 関数に JSDoc コメント付与済み
+- No external libraries or build tools. Plain JS only
+- Semicolons used; quote style is not unified (manifest is standard JSON)
+- Functions have JSDoc comments
 
-## 既知の制限
+## Documentation and language
 
-- **画像キャプチャ**: canvas 経由のため、cross-origin 画像 (pbs.twimg.com 等) は tainted canvas で取得失敗する場合がある。blob: URL (ローカル添付) は問題なし
-- **長い URL**: 300 grapheme を超えるテキストに含まれる URL は省略表示 (`http(s)://` 除去 + `URL_DISPLAY_LIMIT` grapheme を超える分を `...` に置換) に変換。facet URI に原文 URL を保持しクリック可能
-- **スレッド**: X の「+」ボタンで複数ポストを一度に作成した場合のみ Bluesky でも reply chain として投稿される。既存ポストへの返信によるスレッド追加は、対応する Bluesky 側の親ポストを特定できないため未対応
-- **引用 RT**: デフォルトではコメントテキストのみ投稿される。設定画面の「投稿オプション」で有効化すると、引用元ポストの X リンクをテキスト末尾に追加可能
-- **リプライ**: 既存ポストへの返信はデフォルトで Bluesky にクロスポストされない。設定画面の「投稿オプション」で「リプライを Bluesky にポストする」を有効化すると、返信テキストも独立した新規ポストとしてクロスポストされる (Bluesky 側の reply chain にはならず、X の返信先とも紐づかない)
-- **リンクカード**: URL を含むポストで画像がない場合、OGP メタデータからサムネイル付きリンクカードを自動生成。OGP タグが無いページは HTML の `<title>` / `<meta name="description">` を代わりに使い、タイトルが取れなければタイトルなしカードにフォールバック。デフォルト無効、設定画面で有効化時にウェブアクセス権限を一括付与 (無効化で自動解除)。未許可ドメインはカードなしで投稿
-- **RT (リポスト)**: テキスト入力を伴わないため作用しない（意図通り）
+- **Override of the global CLAUDE.md's 「ドキュメント」 language rule**: this file is written entirely in English, and the README is maintained in English and Japanese, English first: `README.md` / `README.ja.md`. The pair cross-links at the top and keeps the same sections in the same order
+- `docs/security-audit.md` is English only and has no Japanese counterpart
+- `PRIVACY_POLICY.md` keeps its path because the Chrome Web Store listing links to it by path (`https://raw.githubusercontent.com/semnil/x-to-bsky/master/PRIVACY_POLICY.md`). `PRIVACY_POLICY_JA.md` keeps its name because `PRIVACY_POLICY.md` points at it
+- `CLAUDE.md` is English only and has no Japanese counterpart
+- Commit messages and PR titles and bodies are written in English, with the Conventional Commits prefixes the history uses (`feat:` / `fix:` / `refactor:` / `docs:` / `ci:` / `chore:` / `test:`). Earlier commits written in Japanese are not rewritten
 
-## テスト方法
+## Known limitations
 
-1. Chrome Web Store からインストール、または `chrome://extensions` → デベロッパーモード → フォルダ読み込み
-2. 設定画面で Bluesky App Password を設定 → 接続テスト
-3. x.com でテスト投稿 → Bluesky 側で投稿確認
-4. 画像付き投稿 → Bluesky 側で画像が表示されることを確認
-5. スレッド投稿 (X の「+」ボタンで複数ツイート) → Bluesky でも reply chain になることを確認
-6. 300 文字超テスト → 自動分割されてスレッドとして投稿されることを確認
-7. ポップアップで OFF → 投稿しても Bluesky に送信されないことを確認
-8. 既存ポストへの返信 → デフォルトでは Bluesky に投稿されない。設定で「リプライを Bluesky にポストする」を ON にすると投稿されることを確認
-9. 設定画面の Advanced → セレクタ変更・リセットが反映されることを確認
-10. 設定でリンクカードを有効化 → 権限ダイアログが表示され、許可後にトグル ON になることを確認
-11. URL 付きテスト投稿 → Bluesky 側でサムネイル付きリンクカードが表示されることを確認
-12. `og:title` も HTML の `<title>` も無いページの URL 付きテスト投稿 → タイトルなしのリンクカードが生成されることを確認 (`<title>` だけがあるページではそのタイトルが入る)
-13. 設定でリンクカードを無効化 → カードが生成されないことを確認
-14. 設定でサムネイルを無効化 → タイトルのみのカードになることを確認
+- **Image capture**: capture goes through a canvas, so cross-origin images (pbs.twimg.com etc.) may fail with a tainted canvas. blob: URLs (local attachments) have no problem
+- **Long URLs**: URLs in text over 300 graphemes are converted to a shortened display (`http(s)://` removed + whatever exceeds `URL_DISPLAY_LIMIT` graphemes replaced with `...`). The facet URI keeps the original URL, so the link stays clickable
+- **Threads**: posts become a reply chain on Bluesky only when several posts are created at once with X's "+" button. Adding to a thread by replying to an existing post is not supported, because the corresponding parent post on Bluesky cannot be identified
+- **Quote reposts**: by default only the comment text is posted. Enabling it in "Post Options" on the options page appends the X link of the quoted post to the end of the text
+- **Replies**: replies to existing posts are not cross-posted to Bluesky by default. Enabling "Post replies to Bluesky" in "Post Options" on the options page cross-posts the reply text too, as an independent new post (it does not become a reply chain on Bluesky and is not tied to the post replied to on X)
+- **Link cards**: for a post that contains a URL and has no image, a link card with a thumbnail is generated automatically from OGP metadata. Pages without OGP tags use the HTML `<title>` / `<meta name="description">` instead, and fall back to a card without a title if no title can be obtained. Disabled by default; web access permission is granted all at once when it is enabled on the options page (removed automatically when disabled). Domains that are not permitted are posted without a card
+- **Reposts**: they involve no text input, so the extension does nothing (intended)
 
-## ビルド
+## How to test
+
+1. Install from the Chrome Web Store, or `chrome://extensions` → Developer mode → load the folder
+2. Set the Bluesky App Password on the options page → Test Connection
+3. Make a test post on x.com → check the post on Bluesky
+4. Post with an image → check that the image is shown on Bluesky
+5. Thread post (several tweets with X's "+" button) → check that it becomes a reply chain on Bluesky too
+6. Test with more than 300 characters → check that it is split automatically and posted as a thread
+7. Turn it OFF in the popup → check that posting does not send anything to Bluesky
+8. Reply to an existing post → by default it is not posted to Bluesky. Check that it is posted once "Post replies to Bluesky" is turned ON in the settings
+9. Advanced on the options page → check that changing and resetting the selectors takes effect
+10. Enable link cards in the settings → check that the permission dialog is shown and the toggle turns ON after granting
+11. Test post with a URL → check that a link card with a thumbnail is shown on Bluesky
+12. Test post with the URL of a page that has neither `og:title` nor an HTML `<title>` → check that a link card without a title is generated (for a page with only `<title>`, that title is used)
+13. Disable link cards in the settings → check that no card is generated
+14. Disable thumbnails in the settings → check that the card has only a title
+
+## Build
 
 ```bash
 chmod +x build.sh
 ./build.sh
-# → x-to-bsky-v${VERSION}.zip が生成される (VERSION は manifest.json から取得)
+# → produces x-to-bsky-v${VERSION}.zip (VERSION is read from manifest.json)
 ```
 
-版上げ PR (manifest.json の `version` / `version_name` だけを変える PR) のマージがリリースになる。master への push で CI が成功すると `.github/workflows/tag-release.yaml` が走り、`tools/tag-plan.sh` がその commit と親の manifest.json を比べる。版 (`version_name` があればそれ、無ければ `version`) が動いていれば `v<版>` タグをその commit に付けて push し、そのタグの上で `release.yaml` を起動する。版が動いていない push では何もしない。同じ名前のタグが別の commit にあれば失敗し、タグは動かさない。
+Merging a version-bump PR (a PR that changes only `version` / `version_name` in manifest.json) is the release. When CI succeeds on a push to master, `.github/workflows/tag-release.yaml` runs, and `tools/tag-plan.sh` compares the manifest.json of that commit and of its parent. If the version (`version_name` when present, otherwise `version`) has moved, it puts the `v<version>` tag on that commit, pushes it, and starts `release.yaml` on that tag. A push that does not move the version does nothing. If a tag with the same name exists on a different commit, it fails and does not move the tag.
 
-`.github/workflows/release.yaml` は `workflow_dispatch` でだけ起動し、タグの上での起動 (`tag-release.yaml` から、または手動) でリリースする。タグを手で push しても起動しない。CI と同じテストの後に `build.sh` で zip を作り、アップロード後にダウンロードした zip のファイル名と sha256 を照合してから、zip を添付した draft Release を作る。ブランチの上の手動起動では照合まで行い、Release は作らない。プレリリースのタグは manifest.json の `version_name` と一致させる。
+`.github/workflows/release.yaml` starts only with `workflow_dispatch`, and releases when started on a tag (from `tag-release.yaml`, or by hand). Pushing a tag by hand does not start it. After the same tests as CI, it builds the zip with `build.sh`, and after uploading it, compares the file name and sha256 of the downloaded zip before creating a draft Release with the zip attached. A manual start on a branch goes as far as the comparison and does not create a Release. A prerelease tag must match `version_name` in manifest.json.
