@@ -39,6 +39,18 @@ function withoutTranslatedElements(html) {
   return html.replace(/<(\w+)\b[^>]*\sdata-i18n(?:-html)?="[^"]*"[^>]*>[\s\S]*?<\/\1>/g, "");
 }
 
+describe("manifest.json", () => {
+  // Chrome answers a browser language with no catalog of its own from default_locale's, and
+  // the pages answer one that is not Japanese in English, so the two fall back to one language.
+  it("falls back to the language the pages fall back to", () => {
+    const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+    const fallback = fs.readFileSync("shared.js", "utf8")
+      .match(/^const UI_LANG = navigator\.language\.startsWith\("ja"\) \? "ja" : "(\w+)";$/m)?.[1];
+    expect(fallback).toBe("en");
+    expect(manifest.default_locale).toBe(fallback);
+  });
+});
+
 describe.each(PAGES)("$html", ({ html: htmlFile, script }) => {
   const html = fs.readFileSync(htmlFile, "utf8");
 

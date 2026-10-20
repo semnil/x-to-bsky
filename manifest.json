@@ -3,7 +3,7 @@
   "name": "__MSG_extName__",
   "version": "1.0.9",
   "description": "__MSG_extDescription__",
-  "default_locale": "ja",
+  "default_locale": "en",
   "permissions": ["storage"],
   "host_permissions": [
     "https://bsky.social/*",

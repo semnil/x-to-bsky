@@ -20,7 +20,7 @@ x-to-bsky/
 ├── options.html         # Options page UI (credentials, selector settings)
 ├── options.js           # Options logic (credentials, selectors, i18n)
 ├── icons/               # 16/48/128px PNG
-├── _locales/            # ja / en messages for the extension name and description (__MSG_*__ in manifest.json)
+├── _locales/            # ja / en messages for the extension name and description (__MSG_*__ in manifest.json); default_locale is en, so any other browser language gets the English ones
 ├── .github/workflows/   # GitHub Actions workflows
 ├── build.sh             # zip packaging
 ├── test/lib.test.js     # Vitest unit tests (lib.js)
