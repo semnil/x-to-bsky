@@ -1,109 +1,111 @@
 # X to Bluesky Crossposter
 
-X (Twitter) の投稿ボタンをフックし、同じテキスト・画像を Bluesky に同時投稿する Chrome 拡張 (Manifest V3)。
+> 日本語版は [README.ja.md](README.ja.md) を参照してください.
 
-## 特徴
+A Chrome extension (Manifest V3) that hooks the X (Twitter) post button and posts the same text and images to Bluesky at the same time.
 
-- **テキスト同時投稿**: x.com で投稿すると Bluesky にも自動投稿
-- **画像対応**: 添付画像 (最大 4 枚) を Bluesky にも同時アップロード
-- **スレッド対応**: X のスレッド投稿を Bluesky の reply chain として再現
-- **300 文字超の自動分割**: Bluesky の 300 grapheme 制限を超える場合、自動でスレッド化。長い URL は省略して表示 (リンク先は元の URL のまま)
-- **リッチテキスト**: URL, メンション (@handle → DID 解決), ハッシュタグを自動検出
-- **リンクカード**: URL を含むポストにサムネイル付きリンクカードを自動添付 (OGP メタデータから生成)
-- **日本語/英語**: ブラウザ言語設定で自動切替
-- **DOM セレクタ設定**: X の DOM 変更時にセレクタを手動更新可能
-- **外部依存ゼロ**: npm パッケージ・CDN なし。全コード自作
+## Features
 
-## セットアップ
+- **Simultaneous text posting**: posting on x.com also posts to Bluesky automatically
+- **Images**: attached images (up to 4) are uploaded to Bluesky at the same time
+- **Threads**: X thread posts are reproduced as a Bluesky reply chain
+- **Automatic split beyond 300 characters**: text over Bluesky's 300-grapheme limit is turned into a thread automatically. Long URLs are shown shortened (the link still goes to the original URL)
+- **Rich text**: URLs, mentions (@handle → DID resolution) and hashtags are detected automatically
+- **Link cards**: a link card with a thumbnail is attached automatically to posts that contain a URL (generated from OGP metadata)
+- **Japanese / English**: switches automatically with the browser's language setting
+- **DOM selector settings**: the selectors can be updated by hand when X changes its DOM
+- **Zero external dependencies**: no npm packages or CDNs. All code is written from scratch
 
-### 1. 拡張をインストール
+## Setup
 
-[Chrome Web Store](https://chromewebstore.google.com/detail/x-to-bluesky-crossposter/mbbbnhfamflofopokhphhkinpggkogke) からインストール
+### 1. Install the extension
 
-> **開発版を使う場合**: `chrome://extensions` → デベロッパーモード ON → 「パッケージ化されていない拡張機能を読み込む」でこのリポジトリのフォルダを指定
+Install it from the [Chrome Web Store](https://chromewebstore.google.com/detail/x-to-bluesky-crossposter/mbbbnhfamflofopokhphhkinpggkogke)
 
-### 2. Bluesky App Password を発行
+> **To use the development version**: `chrome://extensions` → turn Developer mode ON → "Load unpacked" and select this repository's folder
 
-1. [bsky.app](https://bsky.app) にログイン
-2. **設定** → **プライバシーとセキュリティ** → **アプリパスワード**
-   (EN: Settings → Privacy and security → App passwords)
-3. 新しい App Password を作成してコピー
+### 2. Create a Bluesky App Password
 
-### 3. 認証情報を設定
+1. Sign in to [bsky.app](https://bsky.app)
+2. **Settings** → **Privacy and security** → **App passwords**
+   (JA: 設定 → プライバシーとセキュリティ → アプリパスワード)
+3. Create a new App Password and copy it
 
-1. 拡張アイコン右クリック →「オプション」(または拡張ポップアップから「設定を開く」)
-2. Bluesky ハンドルと App Password を入力
-3. 「接続テスト」で確認 → 「保存」
+### 3. Enter your credentials
 
-### 4. 使う
+1. Right-click the extension icon → "Options" (or 「設定を開く」 (Open settings) in the extension popup)
+2. Enter your Bluesky handle and App Password
+3. Check with "Test Connection" → "Save"
 
-- x.com で通常通り投稿 → Bluesky にも同時投稿される
-- ポップアップのトグルで ON/OFF 切り替え可能
-- 投稿ボタンに蝶のバッジが表示される (ON 時)
+### 4. Use it
 
-## 仕組み
+- Post on x.com as usual → it is posted to Bluesky at the same time
+- Turn it ON/OFF with the toggle in the popup
+- A butterfly badge is shown on the post button (when ON)
+
+## How it works
 
 ```
 [x.com compose area] → content.js (capture phase click)
-  → テキスト・画像・スレッドを同期抽出
+  → extracts text, images and threads synchronously
   → chrome.runtime.sendMessage → background.js
   → AT Protocol (bsky.social) → createRecord
-  → content.js → トースト通知
+  → content.js → toast notification
 ```
 
-- content.js: x.com の click イベントを capture phase でリッスンし、投稿ボタンのクリック時にテキスト・画像を同期的に抽出
-- background.js: AT Protocol で Bluesky に認証・投稿。facets (URL, メンション, ハッシュタグ) を自動構築
+- content.js: listens to click events on x.com in the capture phase, and extracts the text and images synchronously when the post button is clicked
+- background.js: authenticates and posts to Bluesky over the AT Protocol. Builds the facets (URLs, mentions, hashtags) automatically
 
-## ビルド
+## Build
 
 ```bash
 chmod +x build.sh
 ./build.sh
-# → x-to-bsky-v${VERSION}.zip が生成される (VERSION は manifest.json から取得)
+# → produces x-to-bsky-v${VERSION}.zip (VERSION is read from manifest.json)
 ```
 
-## ファイル構成
+## File layout
 
 ```
 x-to-bsky/
-├── manifest.json        # Manifest V3 設定
+├── manifest.json        # Manifest V3 configuration
 ├── background.js        # Service worker (Bluesky API)
-├── shared.js            # 共有定数 (DOM セレクタ)
-├── content.js           # x.com コンテンツスクリプト
-├── content.css          # トースト・バッジスタイル
-├── popup.html/js        # ツールバーポップアップ (トグル)
-├── options.html/js      # 設定画面 (認証・セレクタ)
-├── icons/               # 拡張アイコン
-├── build.sh             # zip パッケージング
-├── docs/security-audit.md # セキュリティ監査レポート
+├── shared.js            # Shared constants (DOM selectors)
+├── content.js           # x.com content script
+├── content.css          # Toast and badge styles
+├── popup.html/js        # Toolbar popup (toggle)
+├── options.html/js      # Options page (credentials, selectors)
+├── icons/               # Extension icons
+├── build.sh             # zip packaging
+├── docs/security-audit.md # Security audit report
 └── README.md
 ```
 
-## セキュリティ
+## Security
 
-- 認証情報は `chrome.storage.local` に保存。この拡張のみアクセス可能
-- 通信先は `bsky.social` のみ (リンクカード有効時は対象 URL の OGP メタデータ・サムネイルも取得)
-- App Password は Bluesky の設定からいつでも無効化可能
-- ソースコードは全ファイル公開。第三者依存なし
-- 詳細は [docs/security-audit.md](docs/security-audit.md) を参照
+- Credentials are stored in `chrome.storage.local`. Only this extension can access them
+- The only destination is `bsky.social` (with link cards enabled, the OGP metadata and thumbnail of the target URL are also fetched)
+- The App Password can be revoked at any time in Bluesky's settings
+- Every source file is public. No third-party dependencies
+- See [docs/security-audit.md](docs/security-audit.md) for details
 
-## 既知の制限
+## Known limitations
 
-- **画像キャプチャ**: canvas 経由のため、cross-origin 画像は取得失敗する場合がある
-- **動画非対応**: 動画の同時投稿は未対応
-- **スレッド**: 「+」ボタンで複数ポストを一度に作成した場合のみ対応。既存ポストへの返信によるスレッド追加は未対応
-- **引用 RT**: デフォルトではコメントテキストのみ。設定で有効化すると引用元の X リンクを追加可能
-- **リプライ**: 既存ポストへの返信はデフォルトでクロスポストされない。設定で「リプライを Bluesky にポストする」を有効化すると、返信テキストも新規ポストとしてクロスポストされる
-- **リンクカード**: 画像付き投稿では画像が優先される (両方の embed は共存不可)。OGP 非対応サイトはページのタイトルと説明文を代わりに使い、タイトルも無ければタイトルなしのカードになる。設定画面で有効化時にウェブアクセス権限が付与される (無効化で自動解除)
-- **RT (リポスト)**: テキスト入力を伴わないため作用しない（意図通り）
-- **メンション**: Bluesky 上に存在するハンドルのみ DID 解決される
+- **Image capture**: capture goes through a canvas, so cross-origin images may fail to be captured
+- **No video**: posting videos at the same time is not supported
+- **Threads**: supported only when several posts are created at once with the "+" button. Adding to a thread by replying to an existing post is not supported
+- **Quote reposts**: only the comment text by default. Enabling it in the settings adds the X link of the quoted post
+- **Replies**: replies to existing posts are not cross-posted by default. Enabling "Post replies to Bluesky" in the settings cross-posts the reply text as a new post as well
+- **Link cards**: on posts with images, the images take priority (the two embeds cannot coexist). Sites without OGP get the page's title and description instead, and the card has no title if there is no title either. Web access permission is granted when the feature is enabled on the options page (removed automatically when it is disabled)
+- **Reposts**: they involve no text input, so the extension does nothing (intended)
+- **Mentions**: only handles that exist on Bluesky are resolved to DIDs
 
-## 免責事項
+## Disclaimer
 
-この拡張機能は個人利用を目的としたオープンソースプロジェクトです。以下の点にご注意ください。
+This extension is an open-source project intended for personal use. Please note the following.
 
-- **X (Twitter)**: X の利用規約は自動的手段によるサービスへのアクセスやコンテンツの再配布を広く制限しています。本拡張は DOM を読み取りクロスポストを行うため、利用規約上のグレーゾーンに該当する可能性があります。
-- **Bluesky**: 現在 App Password による認証を使用していますが、Bluesky は OAuth への移行を推奨しています。将来的に App Password が制限される可能性があります。
-- **リンクカード**: リンクカード生成時に対象サイトの OGP メタデータおよびサムネイル画像を取得し Bluesky にアップロードします。サムネイル画像の再ホスティングは各サイトの利用規約に抵触する可能性があります。設定でサムネイルを付けない (タイトルのみ) ようにできます。
+- **X (Twitter)**: X's Terms of Service broadly restrict accessing the service by automated means and redistributing content. This extension reads the DOM to cross-post, so it may fall into a gray area under the Terms of Service.
+- **Bluesky**: authentication currently uses an App Password, but Bluesky recommends moving to OAuth. App Passwords may be restricted in the future.
+- **Link cards**: when generating a link card, the extension fetches the target site's OGP metadata and thumbnail image and uploads them to Bluesky. Rehosting thumbnail images may conflict with each site's terms of use. You can turn thumbnails off in the settings (title only).
 
-本拡張の使用は自己責任で行ってください。各プラットフォームの利用規約を確認し、リスクを理解した上でご利用ください。詳細は [docs/security-audit.md](docs/security-audit.md) の「利用規約リスク分析」セクションを参照してください。
+Use this extension at your own risk. Check each platform's terms of use and use it with an understanding of the risks. For details, see the "Terms of Service risk analysis" section of [docs/security-audit.md](docs/security-audit.md).
