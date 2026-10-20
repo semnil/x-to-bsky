@@ -1,6 +1,6 @@
 # Security audit report — X to Bluesky Crossposter
 
-**Date**: 2026-04-05 (updated 2026-04-09, updated 2026-04-10, updated 2026-04-12, updated 2026-04-29, updated 2026-10-11)
+**Date**: 2026-04-05 (updated 2026-04-09, updated 2026-04-10, updated 2026-04-12, updated 2026-04-29, updated 2026-10-11, updated 2026-10-20)
 **Scope**: all source files (manifest.json, background.js, lib.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
 **Method**: OWASP Top 10 for Browser Extensions, Chrome MV3 security model review, analysis of AT Protocol credential handling
 
@@ -69,8 +69,8 @@ This Chrome extension cross-posts from X (Twitter) to Bluesky. It stores a Blues
 
 ### 3.1 innerHTML and i18n-html (LOW)
 
-- **Location**: `options.js:applyLanguage()`, elements with the `data-i18n-html` attribute in `options.html`
-- **Details**: `applyLanguage()` sets `el.innerHTML = t(key)` on `data-i18n-html` elements. The i18n values contain HTML (`<strong>` tags).
+- **Location**: `shared.js:applyMessages()`, elements with the `data-i18n-html` attribute in `options.html`
+- **Details**: `applyMessages()` sets `el.innerHTML = translate(messages, key)` on `data-i18n-html` elements. The i18n values contain HTML (`<strong>` tags).
 - **Assessment**: safe — the i18n strings are hard-coded in the source code and are not user input. However, if the i18n values were ever externalized or loaded from storage, this would become an XSS vector.
 
 ### 3.2 Toasts use textContent (GOOD)

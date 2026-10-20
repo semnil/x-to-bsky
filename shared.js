@@ -1,4 +1,4 @@
-// shared.js — Constants and icons shared between content.js, options.js and popup.js
+// shared.js — Constants, icons and page language shared between content.js, options.js and popup.js
 
 // Default DOM selectors for X's compose UI.
 // Users can override via the Advanced section in options.
@@ -43,5 +43,34 @@ function createIcon(name) {
 function renderIcons(root = document) {
   root.querySelectorAll("[data-icon]").forEach((el) => {
     el.replaceChildren(createIcon(el.dataset.icon));
+  });
+}
+
+// Language of the extension pages: Japanese when the browser language is Japanese, otherwise English.
+const UI_LANG = navigator.language.startsWith("ja") ? "ja" : "en";
+
+/**
+ * Look up `key` in `messages[UI_LANG]`, falling back to English and then to the key itself.
+ */
+function translate(messages, key) {
+  return messages[UI_LANG][key] || messages.en[key] || key;
+}
+
+/**
+ * Set the document language to UI_LANG and fill the `[data-i18n]` (text),
+ * `[data-i18n-html]` (HTML) and `[data-i18n-placeholder]` elements from `messages`.
+ */
+// eslint-disable-next-line no-unused-vars
+function applyMessages(messages) {
+  document.documentElement.lang = UI_LANG;
+
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = translate(messages, el.dataset.i18n);
+  });
+  document.querySelectorAll("[data-i18n-html]").forEach((el) => {
+    el.innerHTML = translate(messages, el.dataset.i18nHtml);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    el.placeholder = translate(messages, el.dataset.i18nPlaceholder);
   });
 }

@@ -12,7 +12,7 @@ x-to-bsky/
 ├── manifest.json        # Manifest V3 configuration
 ├── background.js        # Service worker: Bluesky API (auth, posting, images, threads)
 ├── lib.js               # Pure functions (grapheme handling, text splitting, facet parsing, URL detection, URL shortening)
-├── shared.js            # Constants and icons shared by content.js / options.js / popup.js (DEFAULT_SELECTORS, createIcon, renderIcons)
+├── shared.js            # Constants, icons and page language shared by content.js / options.js / popup.js (DEFAULT_SELECTORS, createIcon, renderIcons, UI_LANG, translate, applyMessages)
 ├── content.js           # Content script on x.com (post, image and thread hooks)
 ├── content.css          # Styles for the toast notification, badge and icons
 ├── popup.html           # Toolbar popup UI
