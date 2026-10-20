@@ -1,5 +1,7 @@
 # プライバシーポリシー — X to Bluesky Crossposter
 
+[English version here](PRIVACY_POLICY.md)
+
 最終更新日: 2026-04-05
 
 ## 概要

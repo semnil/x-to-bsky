@@ -1,43 +1,43 @@
-# セキュリティ監査レポート — X to Bluesky Crossposter
+# Security audit report — X to Bluesky Crossposter
 
-**日付**: 2026-04-05 (2026-04-09 更新, 2026-04-10 更新, 2026-04-12 更新, 2026-04-29 更新, 2026-10-11 更新)
-**対象**: 全ソースファイル (manifest.json, background.js, lib.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
-**手法**: OWASP Top 10 for Browser Extensions、Chrome MV3 セキュリティモデルレビュー、AT Protocol 認証情報取り扱い分析
-
----
-
-## 概要
-
-この Chrome 拡張は X (Twitter) から Bluesky へのクロスポストを行う。Bluesky App Password をローカルに保存し、`bsky.social` API エンドポイントと通信する。リンクカード機能有効時は任意の URL から OGP メタデータを取得する（`optional_host_permissions` による動的権限）。重大な脆弱性は発見されなかった。以下に中〜低リスクの所見を記載する。
-
-**総合リスク評価: LOW**
+**Date**: 2026-04-05 (updated 2026-04-09, updated 2026-04-10, updated 2026-04-12, updated 2026-04-29, updated 2026-10-11)
+**Scope**: all source files (manifest.json, background.js, lib.js, content.js, shared.js, options.js, options.html, popup.js, popup.html)
+**Method**: OWASP Top 10 for Browser Extensions, Chrome MV3 security model review, analysis of AT Protocol credential handling
 
 ---
 
-## 1. 認証情報の保存
+## Overview
 
-### 1.1 App Password が chrome.storage.local に平文保存 (MEDIUM)
+This Chrome extension cross-posts from X (Twitter) to Bluesky. It stores a Bluesky App Password locally and communicates with the `bsky.social` API endpoints. With the link card feature enabled, it fetches OGP metadata from arbitrary URLs (dynamic permissions through `optional_host_permissions`). No serious vulnerability was found. Medium- to low-risk findings are listed below.
 
-- **場所**: `options.js`, `background.js`
-- **詳細**: Bluesky App Password が `chrome.storage.local` に平文で保存される。`chrome.storage.local` は保存時に暗号化されず、Chrome プロファイルディレクトリ内の LevelDB データベースにそのまま格納される。
-- **影響**: 攻撃者が Chrome プロファイルへのファイルシステムアクセスを取得した場合、App Password を読み取ることができる。
-- **緩和要素**:
-  - App Password はスコープが限定されている（アカウント削除やパスワード変更は不可）
-  - App Password は Bluesky の設定から個別に無効化可能
-  - `chrome.storage.local` はこの拡張のみがアクセス可能（Chrome が強制）
-  - `chrome.storage.sync` は使用していない（認証情報は Google クラウドに同期されない）
-
-### 1.2 セッショントークンはメモリ内のみ (GOOD)
-
-- **場所**: `background.js` (`let session = null`)
-- **詳細**: `accessJwt` と `refreshJwt` は JavaScript メモリにのみ保存され、`chrome.storage` には保存されない。Service worker の終了時に破棄される。
-- **評価**: 正しい実装。Service worker の再起動時にはフレッシュログインが行われる。
+**Overall risk rating: LOW**
 
 ---
 
-## 2. 権限分析
+## 1. Credential storage
 
-### 2.1 Manifest 権限 (GOOD)
+### 1.1 App Password stored in plain text in chrome.storage.local (MEDIUM)
+
+- **Location**: `options.js`, `background.js`
+- **Details**: the Bluesky App Password is saved in `chrome.storage.local` in plain text. `chrome.storage.local` is not encrypted at rest and is stored as is in a LevelDB database inside the Chrome profile directory.
+- **Impact**: an attacker who gains file system access to the Chrome profile can read the App Password.
+- **Mitigating factors**:
+  - An App Password has a limited scope (it cannot delete the account or change the password)
+  - An App Password can be revoked individually in Bluesky's settings
+  - `chrome.storage.local` is accessible only to this extension (enforced by Chrome)
+  - `chrome.storage.sync` is not used (the credentials are not synced to Google's cloud)
+
+### 1.2 Session tokens are held only in memory (GOOD)
+
+- **Location**: `background.js` (`let session = null`)
+- **Details**: `accessJwt` and `refreshJwt` are kept only in JavaScript memory and are not saved to `chrome.storage`. They are discarded when the service worker terminates.
+- **Assessment**: correct implementation. A fresh login happens when the service worker restarts.
+
+---
+
+## 2. Permission analysis
+
+### 2.1 Manifest permissions (GOOD)
 
 ```json
 "permissions": ["storage"],
@@ -48,273 +48,273 @@
 "optional_host_permissions": ["<all_urls>"]
 ```
 
-- **評価**: 必須権限は最小限。API 権限は `storage` のみ。必須 host_permissions は Bluesky ドメインのみ。
-- `tabs`、`webRequest`、`cookies`、`history` 等の機密権限なし。
-- `<all_urls>` は `optional_host_permissions` として宣言。インストール時には権限要求されない。設定画面でリンクカード機能を有効化した時点でウェブアクセス権限が一括付与され、無効化すると自動解除される。
-- Service worker は `chrome.permissions.contains()` で権限を確認し、未許可ドメインの fetch をスキップする (カードなしで投稿)。
-- リンクカード機能: OGP メタデータ取得 (任意 URL の `<head>` のみ読み取り)、サムネイル画像のダウンロード・Bluesky への再アップロードに使用。
+- **Assessment**: the required permissions are minimal. The only API permission is `storage`. The required host_permissions are only the Bluesky domains.
+- No sensitive permissions such as `tabs`, `webRequest`, `cookies` or `history`.
+- `<all_urls>` is declared as `optional_host_permissions`. No permission is requested at install time. Web access permission is granted all at once when the link card feature is enabled on the options page, and removed automatically when it is disabled.
+- The service worker checks the permission with `chrome.permissions.contains()` and skips fetches to domains that are not permitted (posting without a card).
+- Link card feature: used to fetch OGP metadata (reading only the `<head>` of an arbitrary URL), and to download thumbnail images and re-upload them to Bluesky.
 
-### 2.2 Content script のスコープ (GOOD)
+### 2.2 Content script scope (GOOD)
 
 ```json
 "matches": ["https://x.com/*", "https://twitter.com/*"]
 ```
 
-- Content script は X/Twitter ページにのみ注入される。
-- 不要なページアクセスなし。
+- The content script is injected only into X/Twitter pages.
+- No unnecessary page access.
 
 ---
 
-## 3. クロスサイトスクリプティング (XSS) 分析
+## 3. Cross-site scripting (XSS) analysis
 
-### 3.1 innerHTML と i18n-html (LOW)
+### 3.1 innerHTML and i18n-html (LOW)
 
-- **場所**: `options.js:applyLanguage()`、`options.html` の `data-i18n-html` 属性要素
-- **詳細**: `applyLanguage()` が `data-i18n-html` 要素に対して `el.innerHTML = t(key)` を設定する。i18n 値には HTML (`<strong>` タグ) が含まれる。
-- **評価**: 安全 — i18n 文字列はソースコードにハードコードされており、ユーザー入力ではない。ただし i18n 値が外部化またはストレージから読み込まれるようになった場合、XSS ベクターとなる。
+- **Location**: `options.js:applyLanguage()`, elements with the `data-i18n-html` attribute in `options.html`
+- **Details**: `applyLanguage()` sets `el.innerHTML = t(key)` on `data-i18n-html` elements. The i18n values contain HTML (`<strong>` tags).
+- **Assessment**: safe — the i18n strings are hard-coded in the source code and are not user input. However, if the i18n values were ever externalized or loaded from storage, this would become an XSS vector.
 
-### 3.2 トーストは textContent を使用 (GOOD)
+### 3.2 Toasts use textContent (GOOD)
 
-- **場所**: `content.js:showToast()`
-- **詳細**: `toast.textContent = message` — innerHTML ではなく textContent を使用。XSS の影響なし。
-
----
-
-## 4. メッセージパッシングのセキュリティ
-
-### 4.1 送信元検証なし (LOW)
-
-- **場所**: `background.js:chrome.runtime.onMessage.addListener()`
-- **詳細**: `onMessage` ハンドラが送信元（タブ/拡張 ID）を検証していない。マッチしたページ上の任意のコンテンツスクリプトがメッセージを送信可能。
-- **評価**: 低リスク:
-  - この拡張のコンテンツスクリプトのみがこの拡張のバックグラウンドにメッセージを送信可能
-  - `matches` パターンは x.com/twitter.com に限定
-  - メッセージは保存済み認証情報を使用した Bluesky API アクションのみをトリガー
-  - **2026-04-12 更新**: `popup.js` が `chrome.runtime.sendMessage` を廃止し `chrome.storage.local` 直接読み取りに移行。`TOGGLE_CROSSPOST` メッセージと `chrome.tabs.sendMessage` が削除された。background.js に到達するメッセージは `POST_TO_BSKY` と `TEST_LOGIN` のみとなり、攻撃面が縮小した。
-- **判定**: 許容。送信元 (`sender.id`) の検証は追加しない。
-
-### 4.2 コンテンツスクリプトからのスレッドデータを信頼 (LOW)
-
-- **詳細**: コンテンツスクリプトからの `msg.thread` がそのまま使用される。コンテンツスクリプトが侵害された場合（例: x.com 上の DOM ベース XSS）、任意のテキスト/画像が Bluesky に投稿される可能性がある。
-- **評価**: 攻撃面は x.com ページ自体。x.com に XSS 脆弱性がある場合、攻撃者はこの拡張よりも広範なアクセスを持つ。
+- **Location**: `content.js:showToast()`
+- **Details**: `toast.textContent = message` — uses textContent, not innerHTML. No XSS impact.
 
 ---
 
-## 5. ネットワークセキュリティ
+## 4. Message passing security
 
-### 5.1 全通信が HTTPS (GOOD)
+### 4.1 No sender validation (LOW)
 
-- Bluesky API: `https://bsky.social` — HTTP フォールバックなし。
-- リンクカード: ユーザーの投稿テキストに含まれる URL を fetch する。HTTP URL も fetch 対象になり得るが、認証情報は送信されない。
+- **Location**: `background.js:chrome.runtime.onMessage.addListener()`
+- **Details**: the `onMessage` handler does not validate the sender (tab / extension ID). Any content script on a matched page can send a message.
+- **Assessment**: low risk:
+  - Only this extension's content scripts can send messages to this extension's background
+  - The `matches` pattern is limited to x.com/twitter.com
+  - Messages only trigger Bluesky API actions that use the saved credentials
+  - **2026-04-12 update**: `popup.js` dropped `chrome.runtime.sendMessage` and moved to reading `chrome.storage.local` directly. The `TOGGLE_CROSSPOST` message and `chrome.tabs.sendMessage` were removed. The only messages reaching background.js are `POST_TO_BSKY` and `TEST_LOGIN`, which shrank the attack surface.
+- **Verdict**: acceptable. Sender (`sender.id`) validation is not added.
 
-### 5.2 認証情報の送信先が限定 (GOOD)
+### 4.2 Thread data from the content script is trusted (LOW)
 
-- App Password は `bsky.social` への `createSession` リクエストボディにのみ送信される。
-- アクセストークンは `bsky.social` への `Authorization: Bearer` ヘッダーにのみ送信される。
-- リンクカード用の外部 URL fetch には認証情報は一切含まれない。
-
-### 5.3 外部 URL fetch (LOW)
-
-- API エンドポイントは `BSKY_SERVICE` 定数でハードコードされている。
-- `resolveHandle` はハンドルパラメータに `encodeURIComponent()` を使用 — インジェクションリスクなし。
-- oEmbed URL パラメータは `encodeURIComponent()` でエスケープ済み。
-- **リンクカード**: ユーザーの投稿テキストから抽出した URL を `fetch()` で取得する。攻撃面はユーザー自身の入力に限定される。OGP レスポンスは HTML の `</head>` まで (最大 32KB) のみ読み取り、`og:title`/`og:description`/`og:image` のみ使用。JavaScript は実行されない。
+- **Details**: `msg.thread` from the content script is used as is. If the content script were compromised (for example by a DOM-based XSS on x.com), arbitrary text/images could be posted to Bluesky.
+- **Assessment**: the attack surface is the x.com page itself. If x.com has an XSS vulnerability, the attacker has far broader access than this extension.
 
 ---
 
-## 6. データ露出
+## 5. Network security
 
-### 6.0 content.js 変更点のセキュリティレビュー (2026-04-09) (INFORMATIONAL)
+### 5.1 All traffic over HTTPS (GOOD)
 
-#### `getVisibleRect(img)` — getComputedStyle / インジェクションリスク
+- Bluesky API: `https://bsky.social` — no HTTP fallback.
+- Link cards: fetch the URLs contained in the user's post text. HTTP URLs can also be fetched, but no credentials are sent.
 
-- **詳細**: `getComputedStyle(img)` で `objectFit`・`objectPosition` を読み取り、canvas の描画クロップ領域を計算する。
-- **評価**: 安全。`getComputedStyle` はレイアウト情報の読み取りのみで、DOM 書き込みや eval を行わない。`objectPosition` の値 (`parseFloat`) は数値として扱われるため文字列インジェクションリスクなし。`img.clientWidth`/`clientHeight` が 0 の場合は `{ sx:0, sy:0, sw:nw, sh:nh }` にフォールバックするため、ゼロ除算・無限大の伝播も発生しない。
+### 5.2 Credentials go only to limited destinations (GOOD)
 
-#### `captureImageToBase64` — canvas tainted-canvas / データ漏洩
+- The App Password is sent only in the body of the `createSession` request to `bsky.social`.
+- Access tokens are sent only in the `Authorization: Bearer` header to `bsky.social`.
+- External URL fetches for link cards contain no credentials at all.
 
-- **詳細**: `drawImage` の呼び出しが `(img, 0, 0, w, h)` から `(img, sx, sy, sw, sh, 0, 0, w, h)` に変更された（ソース矩形を明示指定するオーバーロード）。
-- **評価**: クロスオリジン画像 (`pbs.twimg.com` 等) は従来同様 tainted canvas となり `canvas.toDataURL()` が例外を投げる。`catch` ブロックが `null` を返すため、クロスオリジン画像データが外部に漏洩することはない。ローカル添付 (`blob:` URL) のみキャプチャ成功する挙動も変化なし。`getVisibleRect` が canvas に新たなクロスオリジンアクセス経路を開くことはない。
+### 5.3 External URL fetches (LOW)
 
-#### `sendMessageWithWakeup` — タイムアウト悪用 / レースコンディション
+- The API endpoint is hard-coded in the `BSKY_SERVICE` constant.
+- `resolveHandle` uses `encodeURIComponent()` for the handle parameter — no injection risk.
+- The oEmbed URL parameter is escaped with `encodeURIComponent()`.
+- **Link cards**: URLs extracted from the user's post text are fetched with `fetch()`. The attack surface is limited to the user's own input. Only the OGP response up to the HTML `</head>` (at most 32KB) is read, and only `og:title`/`og:description`/`og:image` are used. No JavaScript is executed.
 
-- **詳細**: `GET_STATUS` コールバックと `setTimeout(send, 1000)` の両方が `send()` を呼び出す設計に変更。`sent` フラグによりいずれか一方のみが実際に送信される。
-- **評価**:
-  - `sent` フラグは同一 closure スコープ内のローカル変数であり、外部から操作不能。
-  - タイムアウトはブラウザの `setTimeout` であり、攻撃者がページスクリプトから `send()` を直接呼び出すことはできない（IIFE スコープ内のクロージャ）。
-  - タイムアウトが先に発火した場合でも、後続の `GET_STATUS` コールバックは `sent === true` で即 return するため重複送信なし。
-  - `chrome.runtime.sendMessage` はこの拡張の service worker にのみ到達するため、メッセージスプーフィングのリスクなし（MV3 の拡張分離が保証）。
-  - 1000ms タイムアウトは過度に短くなく、かつ UI の反応遅延を招く長さでもない。DoS ベクターとして利用不可。
+---
 
-#### `handlePostClick` — コンテキスト無効化ガード
+## 6. Data exposure
 
-- **詳細**: `chrome.runtime?.id` が falsy の場合に早期リターンする guard 節と、`sendMessageWithWakeup` 呼び出し全体を `try/catch` で囲む変更が追加された。
-- **評価**: 拡張のリロード後に旧コンテンツスクリプトが動作し続ける場合、`chrome.runtime` が無効化され例外を投げる。これを `chrome.runtime?.id` チェックと `catch` ブロックで安全にハンドリングする防御的実装。bypass の余地はない — `chrome.runtime.id` は Chrome が管理するプロパティであり、ページスクリプトから偽装することはできない (`chrome.runtime` オブジェクトはコンテンツスクリプト専用の独立したバインディング)。ユーザーへのフィードバック ("please reload this page") は適切。
+### 6.0 Security review of content.js changes (2026-04-09) (INFORMATIONAL)
 
-### 6.1 aspectRatio フィールドの追加 (2026-04-10) (INFORMATIONAL)
+#### `getVisibleRect(img)` — getComputedStyle / injection risk
 
-- **場所**: `content.js:captureImageToBase64()`、`background.js:createPost()`
-- **詳細**: `captureImageToBase64` の戻り値を `string` から `{ base64, width, height }` に変更し、canvas 描画後の実寸法 (`Math.round` 済み正整数) を返すようにした。`createPost` はこれを AT Protocol の `aspectRatio: { width, height }` フィールドとして `app.bsky.embed.images` に付与する。
-- **評価**:
-  - **値の操作可能性**: `width`/`height` は `canvas.width`/`canvas.height` から取得される。canvas サイズは `captureImageToBase64` 内で `Math.round(img.clientWidth * dpr)` 等で決定され、外部スクリプトが直接書き換える経路はない。コンテンツスクリプトは IIFE スコープで実行されるため、ページスクリプトから変数を差し替えることはできない。
-  - **AT Protocol インジェクション**: `aspectRatio` フィールドの値は正整数に限定される。Bluesky の lexicon (`app.bsky.embed.images#aspectRatio`) は `width`/`height` を `integer` 型で定義しており、文字列やオブジェクトネストによるインジェクションベクターは存在しない。JSON シリアライズ時も数値として出力される。
-  - **プロトタイプ汚染**: `{ ...(condition ? { aspectRatio: { width, height } } : {}) }` のスプレッド演算子は新規オブジェクトを生成する。`{}` リテラルは `Object.prototype` を継承するが、スプレッド元が自前のオブジェクトリテラルであるため `__proto__` や getter の混入は発生しない。AT Protocol ライブラリは使用しておらず、`JSON.stringify` → `fetch` の経路でプロトタイプ汚染が波及することもない。
-  - **情報露出**: 画像の幅・高さはメタデータに過ぎず、センシティブ情報を含まない。canvas の描画内容そのもの (base64) は既に送信されており、寸法の追加送信は攻撃面を拡大しない。
+- **Details**: reads `objectFit` and `objectPosition` with `getComputedStyle(img)` and computes the crop region drawn to the canvas.
+- **Assessment**: safe. `getComputedStyle` only reads layout information and performs no DOM writes or eval. The `objectPosition` value (`parseFloat`) is handled as a number, so there is no string injection risk. When `img.clientWidth`/`clientHeight` is 0, it falls back to `{ sx:0, sy:0, sw:nw, sh:nh }`, so neither division by zero nor infinity propagation occurs.
 
-### 6.2 状態初期化のストレージ直接読み取り移行 (2026-04-12) (INFORMATIONAL)
+#### `captureImageToBase64` — tainted canvas / data leakage
 
-- **場所**: `content.js` 初期化ブロック、`popup.js` 初期化ブロック
-- **変更内容**:
-  - `content.js`: `sendMessageWithRetry({ type: "GET_STATUS" })` + `chrome.runtime.onMessage` の `TOGGLE_CROSSPOST` ハンドラを削除。`chrome.storage.local.get` で `crosspostEnabled`・`bskyHandle`・`includeQuoteUrl`・`customSelectors` を一括取得する方式に変更。`chrome.storage.onChanged` リスナーで `crosspostEnabled`・`bskyHandle`・`customSelectors` の変更も追跡するよう拡張。
-  - `popup.js`: `chrome.runtime.sendMessage({ type: "GET_STATUS" })` を削除。`chrome.storage.local.get` で直接読み取り。`chrome.tabs.sendMessage` による `TOGGLE_CROSSPOST` ブロードキャストを削除。
+- **Details**: the `drawImage` call changed from `(img, 0, 0, w, h)` to `(img, sx, sy, sw, sh, 0, 0, w, h)` (the overload that specifies the source rectangle explicitly).
+- **Assessment**: as before, cross-origin images (`pbs.twimg.com` etc.) make the canvas tainted and `canvas.toDataURL()` throws. The `catch` block returns `null`, so cross-origin image data never leaks out. Capture still succeeds only for local attachments (`blob:` URLs), unchanged. `getVisibleRect` opens no new cross-origin access path to the canvas.
 
-#### `storage.onChanged` の `newValue` が `undefined` になる場合
+#### `sendMessageWithWakeup` — timeout abuse / race condition
 
-- **詳細**: `chrome.storage.local.remove()` でキーを削除すると `onChanged` の変更エントリに `newValue` が存在しない（`undefined`）。
-- **評価**:
-  - `changes.crosspostEnabled.newValue !== false` → `undefined !== false` → `true`。キー削除時は enabled がデフォルト (`true`) に戻る。意図した挙動として許容。
-  - `!!changes.bskyHandle.newValue` → `false`。キー削除で configured が `false` になる。正しい挙動。
-  - `!!changes.includeQuoteUrl.newValue` → `false`。正しい挙動。
-  - `changes.customSelectors.newValue ? ... : { ...DEFAULT_SELECTORS }` → falsy 分岐でデフォルトにリセット。正しい挙動。
-  - **総合評価**: 全フィールドで `undefined` を安全に処理する実装になっている。
+- **Details**: changed so that both the `GET_STATUS` callback and `setTimeout(send, 1000)` call `send()`. The `sent` flag ensures only one of them actually sends.
+- **Assessment**:
+  - The `sent` flag is a local variable in the same closure scope and cannot be manipulated from outside.
+  - The timeout is the browser's `setTimeout`, and an attacker cannot call `send()` directly from a page script (it is a closure inside the IIFE scope).
+  - Even if the timeout fires first, the later `GET_STATUS` callback returns immediately with `sent === true`, so there is no duplicate send.
+  - `chrome.runtime.sendMessage` reaches only this extension's service worker, so there is no risk of message spoofing (guaranteed by MV3's extension isolation).
+  - The 1000ms timeout is neither too short nor long enough to delay the UI's response. It cannot be used as a DoS vector.
 
-#### `chrome.storage.local.get` 失敗時のデフォルト
+#### `handlePostClick` — context invalidation guard
 
-- **詳細**: Chrome エラー時はコールバックが空オブジェクト `{}` を受け取る。
-- **評価**: `enabled = true`（安全なデフォルト）、`configured = false`（認証情報未設定として扱う）、`includeQuoteUrl = false`、`selectors = DEFAULT_SELECTORS`。get 失敗時に未設定状態で動作するため、誤った認証情報で投稿しようとすることはない。
+- **Details**: added a guard clause that returns early when `chrome.runtime?.id` is falsy, and a `try/catch` around the whole `sendMessageWithWakeup` call.
+- **Assessment**: when an old content script keeps running after the extension is reloaded, `chrome.runtime` is invalidated and throws. This defensive implementation handles that safely with the `chrome.runtime?.id` check and the `catch` block. There is no room for a bypass — `chrome.runtime.id` is a property managed by Chrome and cannot be spoofed from a page script (the `chrome.runtime` object is a separate binding exclusive to content scripts). The feedback to the user ("please reload this page") is appropriate.
 
-#### レースコンディション: `storage.local.get` コールバック vs `storage.onChanged`
+### 6.1 Addition of the aspectRatio field (2026-04-10) (INFORMATIONAL)
 
-- **詳細**: `storage.local.get` コールバックが返る前に `storage.onChanged` が発火した場合（popup 操作と同時など）、後続の `get` コールバックが `onChanged` で設定した値を古い値で上書きする可能性がある。
-- **評価**: Chrome のストレージ API は単一スレッドのレンダラプロセス内で動作し、JavaScript イベントループのタスクキューに順次配置される。`storage.local.get` 送信後に `set` が実行された場合、`get` のコールバックが受け取る値は `set` 後の最新値を返すか、または `onChanged` が先に発火してから `get` コールバックが発火する。いずれの場合も最終状態は同一値を二重設定するだけであり、stale な旧値が上書きされるシナリオは Chrome の内部実装上発生しない。**S3 (理論的) — 実用上の問題なし。**
+- **Location**: `content.js:captureImageToBase64()`, `background.js:createPost()`
+- **Details**: changed the return value of `captureImageToBase64` from `string` to `{ base64, width, height }`, so that it returns the actual dimensions after drawing to the canvas (positive integers after `Math.round`). `createPost` attaches them to `app.bsky.embed.images` as the AT Protocol `aspectRatio: { width, height }` field.
+- **Assessment**:
+  - **Whether the values can be manipulated**: `width`/`height` are taken from `canvas.width`/`canvas.height`. The canvas size is decided inside `captureImageToBase64`, for example with `Math.round(img.clientWidth * dpr)`, and there is no path for an external script to rewrite it directly. The content script runs in an IIFE scope, so page scripts cannot swap its variables.
+  - **AT Protocol injection**: the values of the `aspectRatio` field are limited to positive integers. Bluesky's lexicon (`app.bsky.embed.images#aspectRatio`) defines `width`/`height` as type `integer`, so there is no injection vector through strings or nested objects. They are also emitted as numbers when serialized to JSON.
+  - **Prototype pollution**: the spread operator in `{ ...(condition ? { aspectRatio: { width, height } } : {}) }` creates a new object. The `{}` literal inherits from `Object.prototype`, but the spread source is our own object literal, so no `__proto__` or getter can be mixed in. No AT Protocol library is used, and prototype pollution cannot propagate along the `JSON.stringify` → `fetch` path.
+  - **Information exposure**: an image's width and height are only metadata and contain no sensitive information. The canvas content itself (base64) is already sent, so sending the dimensions as well does not widen the attack surface.
 
-### 6.3 URL 省略表示と facet URI 分離 (2026-04-29) (INFORMATIONAL)
+### 6.2 Migration of state initialization to direct storage reads (2026-04-12) (INFORMATIONAL)
 
-- **場所**: `lib.js:shortenUrlsInText()`, `lib.js:buildShortenedUrlFacets()`, `background.js:createPost()`
-- **変更内容**: 300 grapheme を超えるテキストに含まれる URL を省略表示 (`https://` 除去 + パス切り詰め + `...`) に変換。テキストには省略表示、facet の `uri` フィールドには原文 percent-encoded URL を格納する分離方式に変更。
-- **評価**:
-  - **facet URI の信頼性**: `urlEntries[].original` はコンテンツスクリプトが X の DOM から抽出した URL そのもの。`shortenUrlsInText` は `URL_RE_GLOBAL` で検出した URL を `cleanUrlMatch` で末尾句読点除去した値を保持するのみで、URL の改変は行わない。攻撃者がページスクリプトから `original` を差し替える経路はない (IIFE スコープ + content script 分離)。
-  - **byte offset の正確性**: `buildShortenedUrlFacets` は `buildByteOffsetMap` で省略表示テキストの UTF-8 byte offset を計算。`charStart`/`charEnd` は `shortenUrlsInText` 内で文字列結合時に正確に追跡される。オフセットのずれによる不正なテキスト範囲指定は発生しない。
-  - **splitText との連携**: URL 省略後に `splitText` で分割された場合、各チャンクの `urlEntries` は `chunk.indexOf(entry.display)` で再探索される。`display` が省略テキスト内で一意であることが前提だが、同一 URL が複数回出現するケースでも `indexOf` の順序探索により正しく対応する。
+- **Location**: the initialization block of `content.js`, the initialization block of `popup.js`
+- **Changes**:
+  - `content.js`: removed `sendMessageWithRetry({ type: "GET_STATUS" })` and the `TOGGLE_CROSSPOST` handler of `chrome.runtime.onMessage`. Changed to fetching `crosspostEnabled`, `bskyHandle`, `includeQuoteUrl` and `customSelectors` at once with `chrome.storage.local.get`. Extended the `chrome.storage.onChanged` listener to also track changes to `crosspostEnabled`, `bskyHandle` and `customSelectors`.
+  - `popup.js`: removed `chrome.runtime.sendMessage({ type: "GET_STATUS" })`. Reads directly with `chrome.storage.local.get`. Removed the `TOGGLE_CROSSPOST` broadcast through `chrome.tabs.sendMessage`.
 
-### 6.4 投稿時のメモリ内 Base64 画像データ (INFORMATIONAL)
+#### When `storage.onChanged`'s `newValue` is `undefined`
 
-- **詳細**: 画像データ全体 (base64) がコンテンツスクリプトと Service worker 間の Chrome メッセージチャネルを通過する。メモリ内のみで永続化されない。
-- **評価**: 許容範囲。画像はユーザー自身のコンポーズエリアから取得される。
+- **Details**: when a key is deleted with `chrome.storage.local.remove()`, the change entry in `onChanged` has no `newValue` (`undefined`).
+- **Assessment**:
+  - `changes.crosspostEnabled.newValue !== false` → `undefined !== false` → `true`. Deleting the key returns enabled to the default (`true`). Accepted as the intended behavior.
+  - `!!changes.bskyHandle.newValue` → `false`. Deleting the key makes configured `false`. Correct behavior.
+  - `!!changes.includeQuoteUrl.newValue` → `false`. Correct behavior.
+  - `changes.customSelectors.newValue ? ... : { ...DEFAULT_SELECTORS }` → resets to the defaults on the falsy branch. Correct behavior.
+  - **Overall assessment**: the implementation handles `undefined` safely for every field.
 
-### 6.5 リンクカード外部通信 (LOW-MEDIUM)
+#### Defaults when `chrome.storage.local.get` fails
 
-- **場所**: `background.js:fetchOgpMetadata()`, `background.js:uploadThumbnail()`
-- **詳細**: URL を含むポスト投稿時、リンクカード生成のため外部通信が発生する:
-  1. 対象 URL への `fetch()` で HTML `<head>` の OGP メタタグを解析
-  2. サムネイル画像 (og:image) のダウンロード
-- **評価**:
-  - 認証情報は外部サイトに一切送信されない
-  - HTML レスポンスは `</head>` まで (最大 32KB) のみ読み取り、JavaScript は実行されない
-  - OGP から `title`/`description`/`image` のみ抽出。他のフィールドは無視
-  - サムネイル画像は `uploadBlob` 経由で Bluesky に送信されるのみ — ローカルに永続化されない
-  - ユーザーが投稿したテキストに含まれる URL のみがトリガー（拡張が自律的に通信を行うことはない）
-  - `optional_host_permissions` を使用。ユーザーが明示的に権限を許可した場合のみ動作
-  - 5 秒タイムアウト設定あり
-- **緩和策**: デフォルト無効。設定画面で有効化時に権限ダイアログが表示される。サムネイルのみの無効化も可能。
+- **Details**: on a Chrome error, the callback receives an empty object `{}`.
+- **Assessment**: `enabled = true` (a safe default), `configured = false` (treated as credentials not set), `includeQuoteUrl = false`, `selectors = DEFAULT_SELECTORS`. When get fails it runs in the not-configured state, so it never tries to post with wrong credentials.
 
-### 6.6 投稿ボタンのバッジ表示の状態同期 (2026-10-11) (INFORMATIONAL)
+#### Race condition: `storage.local.get` callback vs `storage.onChanged`
 
-- **場所**: `content.js:syncBadges()`, `content.js:removeBadges()`, `content.js` の `storage.onChanged` リスナー
-- **変更内容**: クロスポストが ON かつ認証設定済みのときだけ投稿ボタンにバッジを付け、それ以外では全バッジを外す。`crosspostEnabled`・`bskyHandle`・`customSelectors` の変更時と初期読み込み時に既存ボタンへ反映する。OFF 用のバッジ (`.xtobsky-badge--off`) は廃止。
-- **評価**:
-  - **DOM 挿入**: バッジは `createIcon()` (shared.js) が `createElementNS` で組み立てる SVG を入れた `span` のみ。パスデータは shared.js の固定の定数で、ページ由来の値を DOM に書き込む経路はない。成功トーストのチェックアイコンも同じ `createIcon()` で作る。
-  - **DOM 削除**: `removeBadges()` が削除するのは `.xtobsky-badge` クラスの要素のみで、X 側の要素には触れない。
-  - **権限**: 追加の権限・通信はない。
+- **Details**: if `storage.onChanged` fires before the `storage.local.get` callback returns (for example together with a popup operation), the later `get` callback may overwrite the value set by `onChanged` with an old value.
+- **Assessment**: Chrome's storage API runs inside the single-threaded renderer process and is queued in order on the JavaScript event loop's task queue. If a `set` runs after the `storage.local.get` is sent, the value the `get` callback receives is either the latest value after the `set`, or `onChanged` fires first and then the `get` callback fires. In either case the final state only sets the same value twice, and a scenario where a stale old value overwrites it does not occur in Chrome's internal implementation. **S3 (theoretical) — no practical problem.**
+
+### 6.3 Shortened URL display and separation of the facet URI (2026-04-29) (INFORMATIONAL)
+
+- **Location**: `lib.js:shortenUrlsInText()`, `lib.js:buildShortenedUrlFacets()`, `background.js:createPost()`
+- **Changes**: URLs contained in text over 300 graphemes are converted to a shortened display (`https://` removed + path truncated + `...`). Changed to a split approach that stores the shortened display in the text and the original percent-encoded URL in the facet's `uri` field.
+- **Assessment**:
+  - **Trustworthiness of the facet URI**: `urlEntries[].original` is exactly the URL the content script extracted from X's DOM. `shortenUrlsInText` only keeps the value of a URL detected with `URL_RE_GLOBAL` after `cleanUrlMatch` removes trailing punctuation, and does not alter the URL. There is no path for an attacker to swap `original` from a page script (IIFE scope + content script isolation).
+  - **Accuracy of byte offsets**: `buildShortenedUrlFacets` computes the UTF-8 byte offsets of the shortened text with `buildByteOffsetMap`. `charStart`/`charEnd` are tracked exactly while the strings are concatenated inside `shortenUrlsInText`. No invalid text range caused by misaligned offsets occurs.
+  - **Interaction with splitText**: when the text is split by `splitText` after URL shortening, each chunk's `urlEntries` are searched again with `chunk.indexOf(entry.display)`. This assumes `display` is unique within the shortened text, but even when the same URL appears several times, the in-order search of `indexOf` handles it correctly.
+
+### 6.4 Base64 image data in memory while posting (INFORMATIONAL)
+
+- **Details**: the whole image data (base64) passes through the Chrome message channel between the content script and the service worker. It stays only in memory and is not persisted.
+- **Assessment**: acceptable. The images come from the user's own compose area.
+
+### 6.5 External traffic for link cards (LOW-MEDIUM)
+
+- **Location**: `background.js:fetchOgpMetadata()`, `background.js:uploadThumbnail()`
+- **Details**: when a post containing a URL is made, external traffic occurs to generate the link card:
+  1. `fetch()` of the target URL to parse the OGP meta tags in the HTML `<head>`
+  2. Download of the thumbnail image (og:image)
+- **Assessment**:
+  - No credentials are ever sent to external sites
+  - The HTML response is read only up to `</head>` (at most 32KB), and no JavaScript is executed
+  - Only `title`/`description`/`image` are extracted from OGP. Other fields are ignored
+  - The thumbnail image is only sent to Bluesky through `uploadBlob` — it is not persisted locally
+  - Only URLs contained in the text the user posted trigger it (the extension never communicates on its own)
+  - Uses `optional_host_permissions`. Works only when the user has explicitly granted the permission
+  - A 5-second timeout is set
+- **Mitigations**: disabled by default. A permission dialog is shown when it is enabled on the options page. Disabling only the thumbnail is also possible.
+
+### 6.6 State synchronization of the post button badge (2026-10-11) (INFORMATIONAL)
+
+- **Location**: `content.js:syncBadges()`, `content.js:removeBadges()`, the `storage.onChanged` listener in `content.js`
+- **Changes**: a badge is put on the post button only when crossposting is ON and credentials are set; otherwise every badge is removed. Changes to `crosspostEnabled`, `bskyHandle` and `customSelectors`, and the initial load, are reflected on existing buttons. The OFF badge (`.xtobsky-badge--off`) was dropped.
+- **Assessment**:
+  - **DOM insertion**: the badge is only a `span` containing the SVG that `createIcon()` (shared.js) builds with `createElementNS`. The path data are fixed constants in shared.js, and there is no path that writes a page-derived value into the DOM. The check icon of the success toast is also made with the same `createIcon()`.
+  - **DOM removal**: `removeBadges()` removes only elements with the `.xtobsky-badge` class and does not touch X's elements.
+  - **Permissions**: no additional permissions or traffic.
 
 ---
 
 ## 7. Content Security Policy
 
-### 7.1 manifest に明示的 CSP なし (INFORMATIONAL)
+### 7.1 No explicit CSP in the manifest (INFORMATIONAL)
 
-- **詳細**: manifest.json に `content_security_policy` キーがない。MV3 はインラインスクリプトと `eval()` をブロックするデフォルト CSP を強制する。
-- **評価**: MV3 のデフォルト CSP で十分。インラインスクリプトは使用していない。
-
----
-
-## 8. サプライチェーン / 依存関係
-
-### 8.1 外部依存ゼロ (GOOD)
-
-- npm パッケージ、CDN スクリプト、外部リソースの読み込みなし。
-- 全コードがファーストパーティ。
-- **評価**: サプライチェーン攻撃面なし。
+- **Details**: manifest.json has no `content_security_policy` key. MV3 enforces a default CSP that blocks inline scripts and `eval()`.
+- **Assessment**: MV3's default CSP is sufficient. No inline scripts are used.
 
 ---
 
-## 9. 設計上の良好な点
+## 8. Supply chain / dependencies
 
-- **ES モジュール分離**: 純粋関数を `lib.js` に抽出。Service worker は `"type": "module"` で厳密なスコープ分離。
-- **uploadBlob 共通化**: `uploadImage` と `uploadThumbnail` の共通ロジックを `uploadBlob()` に集約。認証トークンの取り扱いが単一箇所に集約され、レビューと保守が容易。
-- **引用 RT URL 機能**: デフォルト無効。抽出 URL は厳密な正規表現 (`STATUS_URL_RE`) で検証。スクリプトインジェクションのベクターなし。
-- **設定変更のリアルタイム反映**: `chrome.storage.onChanged` リスナーは拡張スコープの真偽値のみを読み取る。セキュリティ上の懸念なし。
-- **リンクカード OGP 取得**: HTML の `</head>` まで (最大 32KB) のみストリーム読み取り。5 秒タイムアウトは fetch 開始からストリーム読み取り完了まで維持 (`AbortController`)。Content-Type の charset 検出に対応。JavaScript 実行なし。
-- **オプション権限**: `optional_host_permissions` + `chrome.permissions.request()` で設定画面のトグル操作時に権限を付与。無効化時に `chrome.permissions.remove()` で自動解除。
-- **スレッド投稿のセッション再利用**: `postThread()` で一度取得した session を全ポストに渡す。スレッド投稿中の不要な再認証・storage 読み取りを排除。
-- **設定マイグレーション**: `chrome.runtime.onInstalled` で旧設定キーを自動マイグレーション。マイグレーション後に旧キーを削除。
-- **Service worker 起動対策 (2026-04-12 更新)**: MV3 の service worker 非アクティブ問題への対応を刷新した。`popup.js` と `content.js` の初期状態取得を `chrome.runtime.sendMessage (GET_STATUS)` から `chrome.storage.local.get` への直接読み取りに変更。service worker の起動を必要とせず、コールバック遅延やリトライ競合が発生しない。投稿 (`POST_TO_BSKY`) は従来どおり `sendMessageWithWakeup()` を使用し、事前 ping で service worker を起動してから送信する wakeup 方式を維持。`sendMessageWithRetry` (リトライ付き `GET_STATUS` 送信) は削除済み。
+### 8.1 Zero external dependencies (GOOD)
+
+- No npm packages, CDN scripts or external resources are loaded.
+- All code is first-party.
+- **Assessment**: no supply-chain attack surface.
 
 ---
 
-## 所見一覧
+## 9. Good points of the design
 
-| # | 所見 | 重要度 | 状態 |
+- **ES module separation**: the pure functions are extracted into `lib.js`. The service worker uses `"type": "module"` for strict scope separation.
+- **Shared uploadBlob**: the common logic of `uploadImage` and `uploadThumbnail` is consolidated into `uploadBlob()`. Handling of the auth token is concentrated in one place, which makes review and maintenance easy.
+- **Quote repost URL feature**: disabled by default. The extracted URL is validated with a strict regular expression (`STATUS_URL_RE`). No vector for script injection.
+- **Real-time reflection of setting changes**: the `chrome.storage.onChanged` listener reads only extension-scoped booleans. No security concern.
+- **Fetching OGP for link cards**: stream-reads only up to the HTML `</head>` (at most 32KB). The 5-second timeout is kept from the start of the fetch until the stream read completes (`AbortController`). Supports detecting the charset from Content-Type. No JavaScript execution.
+- **Optional permissions**: `optional_host_permissions` + `chrome.permissions.request()` grant the permission when the toggle on the options page is turned on. It is removed automatically with `chrome.permissions.remove()` when disabled.
+- **Session reuse for thread posts**: `postThread()` passes the session obtained once to every post. Removes unnecessary re-authentication and storage reads during a thread post.
+- **Settings migration**: old setting keys are migrated automatically in `chrome.runtime.onInstalled`. The old keys are deleted after the migration.
+- **Service worker startup handling (2026-04-12 update)**: reworked the handling of MV3's inactive service worker problem. Changed the initial state retrieval of `popup.js` and `content.js` from `chrome.runtime.sendMessage (GET_STATUS)` to reading `chrome.storage.local.get` directly. No service worker startup is needed, and neither callback delays nor retry races occur. Posting (`POST_TO_BSKY`) still uses `sendMessageWithWakeup()`, keeping the wakeup approach that starts the service worker with a ping before sending. `sendMessageWithRetry` (sending `GET_STATUS` with retries) has been removed.
+
+---
+
+## Findings
+
+| # | Finding | Severity | Status |
 |---|------|--------|------|
-| 1.1 | App Password が chrome.storage.local に平文保存 | MEDIUM | 許容リスク — UI に記載済み |
-| 3.1 | innerHTML と i18n-html 値 | LOW | 安全（開発者管理の文字列） |
-| 4.1 | メッセージハンドラで送信元検証なし | LOW | 許容（MV3 が分離を強制） |
-| 4.2 | コンテンツスクリプトのデータを信頼 | LOW | 許容（x.com 信頼境界） |
-| 5.3 | リンクカード用外部 URL fetch | LOW | ユーザー入力起点、head のみ解析 |
-| 6.0 | content.js 変更点 (getVisibleRect / sendMessageWithWakeup / コンテキストガード) | INFO | 問題なし — 詳細は §6.0 参照 |
-| 6.1 | aspectRatio フィールド追加 (canvas 寸法を AT Protocol に送信) | INFO | 問題なし — 詳細は §6.1 参照 |
-| 6.2 | ストレージ直接読み取り移行 (newValue=undefined / get失敗 / レース) | INFO | 問題なし — 詳細は §6.2 参照 |
-| 6.3 | URL 省略表示と facet URI 分離 (text/facet の値が異なる) | INFO | 問題なし — 詳細は §6.3 参照 |
-| 6.5 | リンクカード外部通信 | LOW-MEDIUM | デフォルト無効、optional_host_permissions |
-| 6.6 | 投稿ボタンのバッジ表示の状態同期 (固定 SVG の挿入・自クラスのみ削除) | INFO | 問題なし — 詳細は §6.6 参照 |
+| 1.1 | App Password stored in plain text in chrome.storage.local | MEDIUM | Accepted risk — stated in the UI |
+| 3.1 | innerHTML and i18n-html values | LOW | Safe (developer-controlled strings) |
+| 4.1 | No sender validation in the message handler | LOW | Acceptable (MV3 enforces isolation) |
+| 4.2 | Data from the content script is trusted | LOW | Acceptable (x.com trust boundary) |
+| 5.3 | External URL fetches for link cards | LOW | Triggered by user input, parses head only |
+| 6.0 | content.js changes (getVisibleRect / sendMessageWithWakeup / context guard) | INFO | No issue — see §6.0 for details |
+| 6.1 | aspectRatio field added (canvas dimensions sent to the AT Protocol) | INFO | No issue — see §6.1 for details |
+| 6.2 | Migration to direct storage reads (newValue=undefined / get failure / race) | INFO | No issue — see §6.2 for details |
+| 6.3 | Shortened URL display and facet URI separation (text and facet values differ) | INFO | No issue — see §6.3 for details |
+| 6.5 | External traffic for link cards | LOW-MEDIUM | Disabled by default, optional_host_permissions |
+| 6.6 | State synchronization of the post button badge (inserting a fixed SVG, removing only its own class) | INFO | No issue — see §6.6 for details |
 
-**CRITICAL または HIGH の所見なし。**
+**No CRITICAL or HIGH findings.**
 
 ---
 
-## 10. 利用規約リスク分析
+## 10. Terms of Service risk analysis
 
-### 10.1 X (Twitter) — スクレイピング・自動化条項 (MEDIUM)
+### 10.1 X (Twitter) — scraping and automation clauses (MEDIUM)
 
-- **関連条項**: X 利用規約 — サービスへの自動的手段によるアクセスの禁止、コンテンツ再配布制限
-- **詳細**:
-  - X の ToS はスクレイピングを広く禁止しており、DOM 読み取りと API アクセスを区別していない
-  - 「自動化された手段」によるサービスアクセスの禁止が、capture phase のクリックフックに適用される可能性
-  - 「X Content」の再配布制限が、ユーザー自身のコンテンツの他プラットフォームへの投稿に適用される可能性
-- **評価**: ユーザー自身が作成したコンテンツを自身の操作で投稿する形態であり、完全自律型スクレイパーとは性質が異なる。個人ユーザー向けクロスポストツールに対して積極的な措置が取られる可能性は低いが、ToS 上のグレーゾーンは存在する。
+- **Relevant clauses**: X Terms of Service — prohibition of accessing the service by automated means, restrictions on redistributing content
+- **Details**:
+  - X's ToS broadly prohibits scraping and does not distinguish between reading the DOM and API access
+  - The prohibition of accessing the service "by automated means" may apply to the capture phase click hook
+  - The restrictions on redistributing "X Content" may apply to posting the user's own content to another platform
+- **Assessment**: the form is that users post content they created themselves through their own action, which differs in nature from a fully autonomous scraper. Active measures against a cross-posting tool for individual users are unlikely, but a gray area under the ToS exists.
 
-### 10.2 Bluesky — App Password が制限されうる (LOW)
+### 10.2 Bluesky — App Passwords may be restricted (LOW)
 
-- **関連条項**: Bluesky 開発者ガイドライン、OAuth 移行ブログ記事
-- **詳細**:
-  - クロスポストを禁止する条項は存在しない
-  - ユーザー操作起点の 1:1 投稿であり、スパムには該当しない
-  - App Password は現在も動作するが、Bluesky は OAuth への移行を推奨しており、将来的に App Password が制限される可能性がある
-  - Bot ラベル要件はユーザー自身のアカウントでの投稿には現時点で適用されない
-- **評価**: 最もリスクが低い。唯一の技術的懸念は App Password → OAuth 移行時期。この拡張の認証は App Password のみで、OAuth には未対応。
+- **Relevant clauses**: Bluesky developer guidelines, the blog post on the OAuth migration
+- **Details**:
+  - There is no clause that prohibits cross-posting
+  - Posts are 1:1 and triggered by the user, so they do not count as spam
+  - App Passwords still work, but Bluesky recommends moving to OAuth, and App Passwords may be restricted in the future
+  - The bot label requirement does not currently apply to posts from the user's own account
+- **Assessment**: the lowest risk. The only technical concern is when the App Password → OAuth migration happens. This extension authenticates only with an App Password and does not support OAuth.
 
-### 10.3 リンクカード — OGP 画像再ホスティング (LOW-MEDIUM)
+### 10.3 Link cards — rehosting OGP images (LOW-MEDIUM)
 
-- **関連条項**: 各サイトの利用規約、著作権法
-- **詳細**:
-  - OGP メタデータの取得: 公開 HTML の `<head>` セクションから `og:title`/`og:description`/`og:image` を読み取る
-  - OGP 画像のダウンロードと Bluesky への再アップロードは「再ホスティング」に該当する可能性がある
-- **評価**: OGP 画像の再アップロードは各サイトの ToS 上は議論の余地がある。設定でサムネイルなし（タイトルのみ）に変更可能。デフォルト無効であり、ユーザーの明示的な操作が必要。
+- **Relevant clauses**: each site's terms of use, copyright law
+- **Details**:
+  - Fetching OGP metadata: reads `og:title`/`og:description`/`og:image` from the `<head>` section of public HTML
+  - Downloading OGP images and re-uploading them to Bluesky may count as "rehosting"
+- **Assessment**: re-uploading OGP images is debatable under each site's ToS. It can be changed to no thumbnail (title only) in the settings. Disabled by default, and an explicit action by the user is required.
 
-### 10.4 総合リスク評価
+### 10.4 Overall risk rating
 
-| プラットフォーム | リスク | 主な懸念 |
+| Platform | Risk | Main concern |
 |-----------------|--------|---------|
-| X (Twitter) | MEDIUM | スクレイピング禁止の広範な解釈 |
-| Bluesky | LOW | App Password が制限されうる |
-| リンク先サイト | LOW-MEDIUM | OGP 画像再ホスティング |
+| X (Twitter) | MEDIUM | Broad interpretation of the scraping prohibition |
+| Bluesky | LOW | App Passwords may be restricted |
+| Linked sites | LOW-MEDIUM | Rehosting OGP images |
