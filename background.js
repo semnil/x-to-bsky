@@ -33,6 +33,23 @@ function createSession() {
   return sessionPromise;
 }
 
+/**
+ * An error that the extension pages show in the user's language: `code` names its message in
+ * ERROR_MESSAGES (shared.js), and `detail` fills the message's `{detail}`.
+ */
+class CodedError extends Error {
+  constructor(code, detail = "") {
+    super(detail ? `${code}: ${detail}` : code);
+    this.code = code;
+    this.detail = detail;
+  }
+}
+
+/** The response sent to the extension pages for a failed request. */
+function errorResponse(err) {
+  return { ok: false, error: err.message, code: err.code, detail: err.detail };
+}
+
 async function _createSession() {
   const { bskyHandle, bskyAppPassword } = await chrome.storage.local.get([
     "bskyHandle",
@@ -40,7 +57,7 @@ async function _createSession() {
   ]);
 
   if (!bskyHandle || !bskyAppPassword) {
-    throw new Error("Bluesky credentials not configured. Open extension settings.");
+    throw new CodedError("notConfigured");
   }
 
   // Try to refresh existing session
@@ -81,12 +98,9 @@ async function _createSession() {
     session = null;
     const err = await res.json().catch(() => ({}));
     if (res.status === 401 || err.error === "AuthenticationRequired") {
-      throw new Error(
-        "Authentication failed: invalid handle or App Password. " +
-        "Check your credentials in extension settings, or generate a new App Password."
-      );
+      throw new CodedError("authFailed");
     }
-    throw new Error(`Login failed: ${err.message || err.error || res.status}`);
+    throw new CodedError("loginFailed", String(err.message || err.error || res.status));
   }
 
   session = await res.json();
@@ -146,7 +160,7 @@ async function uploadBlob(bytes, contentType, accessJwt) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(`Blob upload failed: ${err.message || res.status}`);
+    throw new CodedError("uploadFailed", String(err.message || res.status));
   }
 
   return await res.json();
@@ -493,7 +507,7 @@ async function createPost(text, images = [], parent = null, root = null, sess = 
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(`Post failed: ${err.message || res.status}`);
+    throw new CodedError("postFailed", String(err.message || res.status));
   }
 
   return await res.json();
@@ -558,7 +572,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse({ ok: true, uri: results[0]?.uri, postCount: results.length });
       })
       .catch((err) => {
-        sendResponse({ ok: false, error: err.message });
+        sendResponse(errorResponse(err));
       });
     return true;
   }
@@ -568,7 +582,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .then((sess) =>
         sendResponse({ ok: true, handle: sess.handle, did: sess.did })
       )
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
+      .catch((err) => sendResponse(errorResponse(err)));
     return true;
   }
 

@@ -74,3 +74,33 @@ function applyMessages(messages) {
     el.placeholder = translate(messages, el.dataset.i18nPlaceholder);
   });
 }
+
+// Messages for the errors that background.js reports by `code`; `{detail}` is the reason the Bluesky API gave.
+const ERROR_MESSAGES = {
+  ja: {
+    notConfigured: "Bluesky の認証情報が未設定です。拡張の設定を開いてください。",
+    authFailed: "認証に失敗しました: ハンドルまたは App Password が正しくありません。拡張の設定で認証情報を確認するか、新しい App Password を発行してください。",
+    loginFailed: "ログインに失敗しました: {detail}",
+    uploadFailed: "画像のアップロードに失敗しました: {detail}",
+    postFailed: "投稿に失敗しました: {detail}",
+  },
+  en: {
+    notConfigured: "Bluesky credentials not configured. Open extension settings.",
+    authFailed: "Authentication failed: invalid handle or App Password. Check your credentials in extension settings, or generate a new App Password.",
+    loginFailed: "Login failed: {detail}",
+    uploadFailed: "Blob upload failed: {detail}",
+    postFailed: "Post failed: {detail}",
+  },
+};
+
+/**
+ * Text of a failed response from background.js: the message for its `code` in UI_LANG with
+ * `{detail}` filled in, or its `error` text when the response carries no known code.
+ */
+// eslint-disable-next-line no-unused-vars
+function errorText(res) {
+  if (res?.code && Object.prototype.hasOwnProperty.call(ERROR_MESSAGES.en, res.code)) {
+    return translate(ERROR_MESSAGES, res.code).replace("{detail}", res.detail ?? "");
+  }
+  return res?.error;
+}

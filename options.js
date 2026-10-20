@@ -95,7 +95,7 @@ function t(key) {
   return translate(i18n, key);
 }
 
-// DEFAULT_SELECTORS, renderIcons, translate and applyMessages are provided by shared.js (loaded before this file).
+// DEFAULT_SELECTORS, renderIcons, translate, applyMessages and errorText are provided by shared.js (loaded before this file).
 
 const SELECTOR_KEYS = Object.keys(DEFAULT_SELECTORS);
 
@@ -200,7 +200,7 @@ testBtn.addEventListener("click", () => {
       if (res && res.ok) {
         showMessage(messageEl, `${t("msgSuccess")}${res.handle} (${res.did})`);
       } else {
-        showMessage(messageEl, `${t("msgFail")}${res?.error || t("msgUnknown")}`, true);
+        showMessage(messageEl, `${t("msgFail")}${errorText(res) || t("msgUnknown")}`, true);
       }
     });
   });

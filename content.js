@@ -1,6 +1,6 @@
 // content.js — Runs on x.com / twitter.com
 // Observes the post button click and sends text + images to background for Bluesky cross-posting.
-// DEFAULT_SELECTORS is provided by shared.js (loaded before this file).
+// DEFAULT_SELECTORS, translate and errorText are provided by shared.js (loaded before this file).
 
 (() => {
   "use strict";
@@ -17,6 +17,27 @@
   let includeQuoteUrl = false;
   let postReplies = false;
   let selectors = { ...DEFAULT_SELECTORS };
+
+  const i18n = {
+    ja: {
+      reloadPage: "Bluesky: ページを再読み込みしてください",
+      noText: "Bluesky: テキストが見つかりません (セレクタの不一致?)",
+      extensionError: "Bluesky: 拡張のエラー",
+      posted: "Bluesky: 投稿しました",
+      postedThread: "Bluesky: スレッドを投稿しました ({count} 件)",
+      unknownError: "不明なエラー",
+      badgeTitle: "Bluesky クロスポスト: ON",
+    },
+    en: {
+      reloadPage: "Bluesky: please reload this page",
+      noText: "Bluesky: no text found (selector mismatch?)",
+      extensionError: "Bluesky: extension error",
+      posted: "Bluesky: posted",
+      postedThread: "Bluesky: posted thread ({count} posts)",
+      unknownError: "unknown error",
+      badgeTitle: "Bluesky crosspost: ON",
+    },
+  };
 
   // Load all settings from storage in a single call
   chrome.storage.local.get(
@@ -351,7 +372,7 @@
 
     // Guard: extension context may be invalidated after extension reload
     if (!chrome.runtime?.id) {
-      showToast("Bluesky: please reload this page", true);
+      showToast(translate(i18n, "reloadPage"), true);
       return;
     }
 
@@ -360,28 +381,29 @@
 
     const thread = extractComposeThread();
     if (thread.length === 0) {
-      showToast("Bluesky: no text found (selector mismatch?)", true);
+      showToast(translate(i18n, "noText"), true);
       return;
     }
 
     try {
       sendMessageWithWakeup({ type: "POST_TO_BSKY", thread }, (res, err) => {
         if (err) {
-          showToast("Bluesky: extension error", true);
+          showToast(translate(i18n, "extensionError"), true);
           return;
         }
         if (res && res.ok) {
           const msg =
             res.postCount > 1
-              ? `Bluesky: posted thread (${res.postCount} posts)`
-              : "Bluesky: posted";
+              ? translate(i18n, "postedThread").replace("{count}", String(res.postCount))
+              : translate(i18n, "posted");
           showToast(msg);
         } else {
-          showToast(`Bluesky: ${res?.error || "unknown error"}`, true);
+          const reason = errorText(res) || translate(i18n, "unknownError");
+          showToast(`Bluesky: ${reason}`, true);
         }
       });
     } catch {
-      showToast("Bluesky: please reload this page", true);
+      showToast(translate(i18n, "reloadPage"), true);
     }
   }
 
@@ -396,7 +418,7 @@
     const badge = document.createElement("span");
     badge.className = "xtobsky-badge";
     badge.appendChild(createIcon("butterfly"));
-    badge.title = "Bluesky crosspost: ON";
+    badge.title = translate(i18n, "badgeTitle");
 
     button.style.position = "relative";
     button.appendChild(badge);
