@@ -70,7 +70,7 @@ This Chrome extension cross-posts from X (Twitter) to Bluesky. It stores a Blues
 ### 3.1 innerHTML and i18n-html (LOW)
 
 - **Location**: `shared.js:applyMessages()`, elements with the `data-i18n-html` attribute in `options.html`
-- **Details**: `applyMessages()` sets `el.innerHTML = translate(messages, key)` on `data-i18n-html` elements. The i18n values contain HTML (`<strong>` tags).
+- **Details**: `applyMessages()` sets `el.innerHTML = translate(messages, key)` on `data-i18n-html` elements. The i18n values contain HTML (`<strong>` tags). `popup.html` has no `data-i18n-html` elements; its messages are set with `textContent`.
 - **Assessment**: safe — the i18n strings are hard-coded in the source code and are not user input. However, if the i18n values were ever externalized or loaded from storage, this would become an XSS vector.
 
 ### 3.2 Toasts use textContent (GOOD)

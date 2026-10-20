@@ -103,23 +103,23 @@
 <body>
   <h1><span class="title-icon" data-icon="butterfly"></span>X → Bluesky</h1>
 
-  <div id="not-configured" class="not-configured" style="display:none;">
+  <div id="not-configured" class="not-configured" style="display:none;" data-i18n="notConfigured">
     未設定。設定画面で Bluesky 認証情報を入力してください。
   </div>
 
   <div id="status" class="status" style="display:none;">
-    接続先: <span id="handle" class="handle"></span>
+    <span data-i18n="connectedTo">接続先:</span> <span id="handle" class="handle"></span>
   </div>
 
   <div class="row">
-    <label for="toggle">クロスポスト</label>
+    <label for="toggle" data-i18n="crosspostLabel">クロスポスト</label>
     <label class="toggle">
       <input type="checkbox" id="toggle" checked>
       <span class="slider"></span>
     </label>
   </div>
 
-  <a id="settings-link" class="settings-link">設定を開く</a>
+  <a id="settings-link" class="settings-link" data-i18n="openSettings">設定を開く</a>
 
   <script src="shared.js"></script>
   <script src="popup.js"></script>

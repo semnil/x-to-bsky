@@ -1,5 +1,22 @@
 // popup.js
 
+const i18n = {
+  ja: {
+    notConfigured: "未設定。設定画面で Bluesky 認証情報を入力してください。",
+    connectedTo: "接続先:",
+    crosspostLabel: "クロスポスト",
+    openSettings: "設定を開く",
+  },
+  en: {
+    notConfigured: "Not set up. Enter your Bluesky credentials on the settings page.",
+    connectedTo: "Connected as:",
+    crosspostLabel: "Crosspost",
+    openSettings: "Open settings",
+  },
+};
+
+// renderIcons and applyMessages are provided by shared.js (loaded before this file).
+applyMessages(i18n);
 renderIcons();
 
 const toggle = document.getElementById("toggle");
