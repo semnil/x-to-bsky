@@ -31,7 +31,6 @@ x-to-bsky/
 ├── tools/tag-plan.sh    # Tag release: prints the tag to put on a master commit that moved the version
 ├── tools/verify-version.sh # Release: checks that the tag matches version / version_name in manifest.json
 ├── package.json         # dev dependencies (vitest)
-├── docs/security-audit.md # Security audit report (English only)
 ├── PRIVACY_POLICY.md    # Privacy policy (EN; JA is PRIVACY_POLICY_JA.md)
 ├── README.md            # Setup steps and description of the behavior (EN; JA is README.ja.md)
 └── CLAUDE.md            # This file
@@ -110,7 +109,6 @@ sequenceDiagram
 ## Documentation and language
 
 - **Override of the global CLAUDE.md's 「ドキュメント」 language rule**: this file is written entirely in English, and the README is maintained in English and Japanese, English first: `README.md` / `README.ja.md`. The pair cross-links at the top and keeps the same sections in the same order
-- `docs/security-audit.md` is English only and has no Japanese counterpart
 - `PRIVACY_POLICY.md` keeps its path because the Chrome Web Store listing links to it by path (`https://raw.githubusercontent.com/semnil/x-to-bsky/master/PRIVACY_POLICY.md`). `PRIVACY_POLICY_JA.md` keeps its name because `PRIVACY_POLICY.md` points at it
 - `CLAUDE.md` is English only and has no Japanese counterpart
 - Commit messages and PR titles and bodies are written in English, with the Conventional Commits prefixes the history uses (`feat:` / `fix:` / `refactor:` / `docs:` / `ci:` / `chore:` / `test:`). Earlier commits written in Japanese are not rewritten
