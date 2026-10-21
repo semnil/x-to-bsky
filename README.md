@@ -96,7 +96,7 @@ x-to-bsky/
 - **Threads**: supported only when several posts are created at once with the "+" button. Adding to a thread by replying to an existing post is not supported
 - **Quote reposts**: only the comment text by default. Enabling it in the settings adds the X link of the quoted post
 - **Replies**: replies to existing posts are not cross-posted by default. Enabling "Post replies to Bluesky" in the settings cross-posts the reply text as a new post as well
-- **Link cards**: on posts with images, the images take priority (the two embeds cannot coexist). Sites without OGP get the page's title and description instead, and the card has no title if there is no title either. Web access permission is granted when the feature is enabled on the options page (removed automatically when it is disabled). Pages and thumbnail images on this computer or the local network (localhost, private IP addresses and similar) are not fetched
+- **Link cards**: on posts with images, the images take priority (the two embeds cannot coexist). Sites without OGP get the page's title and description instead, and the card has no title if there is no title either. Web access permission is granted when the feature is enabled on the options page (removed automatically when it is disabled). Pages and thumbnail images whose URL names localhost, a private IP address or a similar local address are not fetched, and pages and images that redirect to another URL get no title, description or thumbnail
 - **Reposts**: they involve no text input, so the extension does nothing (intended)
 - **Mentions**: only handles that exist on Bluesky are resolved to DIDs
 

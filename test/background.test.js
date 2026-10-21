@@ -12,12 +12,20 @@ const records = [];
 
 const json = (obj) => new Response(JSON.stringify(obj), { status: 200, headers: { "content-type": "application/json" } });
 
-/** A stubbed response for `url`; `finalUrl` stands for the URL a followed redirect ended at. */
-function respond(url) {
+/**
+ * A stubbed response for `url`. A page with `redirectTo` redirects there: with `redirect: "error"`
+ * the fetch fails as a network error, otherwise the target is requested and served.
+ */
+function respond(url, init) {
+  requested.push(url);
   const page = pages[url];
   if (!page) return new Response("not found", { status: 404 });
+  if (page.redirectTo) {
+    if (init.redirect === "error") throw new TypeError("Failed to fetch");
+    return respond(page.redirectTo, init);
+  }
   const res = new Response(page.body, { status: 200, headers: { "content-type": page.type } });
-  Object.defineProperty(res, "url", { value: page.finalUrl || url });
+  Object.defineProperty(res, "url", { value: url });
   return res;
 }
 
@@ -69,8 +77,7 @@ beforeAll(async () => {
       records.push(body);
       return json({ uri: `at://${body.repo}/app.bsky.feed.post/1`, cid: "cid" });
     }
-    requested.push(requestUrl);
-    return respond(requestUrl);
+    return respond(requestUrl, init);
   };
   await import("../background.js");
 });
@@ -109,18 +116,32 @@ describe("link card destinations", () => {
     expect(record.embed.external.title).toBe("");
   });
 
-  it("ignores a linked page whose redirect ends on a private address", async () => {
-    pages["https://pub.example/moved"] = { type: "text/html", body: html({ title: "Local page" }), finalUrl: "http://10.0.0.5/" };
+  it("does not follow a linked page's redirect to a private address", async () => {
+    pages["https://pub.example/moved"] = { redirectTo: "http://10.0.0.5/" };
+    pages["http://10.0.0.5/"] = { type: "text/html", body: html({ title: "Local page" }) };
     const record = await post("see https://pub.example/moved");
+    expect(requested).not.toContain("http://10.0.0.5/");
     expect(record.embed.external.title).toBe("");
     expect(record.embed.external.thumb).toBeUndefined();
   });
 
-  it("ignores a thumbnail whose redirect ends on a private address", async () => {
+  it("does not follow a thumbnail's redirect to a private address", async () => {
     pages["https://pub.example/page"] = { type: "text/html", body: html({ title: "Page", image: "https://img.example/moved.png" }) };
-    pages["https://img.example/moved.png"] = { type: "image/png", body: "LOCAL-IMAGE", finalUrl: "http://10.0.0.5/a.png" };
+    pages["https://img.example/moved.png"] = { redirectTo: "http://10.0.0.5/a.png" };
+    pages["http://10.0.0.5/a.png"] = { type: "image/png", body: "LOCAL-IMAGE" };
     const record = await post("see https://pub.example/page");
+    expect(requested).not.toContain("http://10.0.0.5/a.png");
     expect(record.embed.external.thumb).toBeUndefined();
+    expect(uploads).toEqual([]);
+  });
+
+  it("does not follow redirects to a public address either", async () => {
+    pages["https://pub.example/moved"] = { redirectTo: "https://pub.example/final" };
+    pages["https://pub.example/final"] = { type: "text/html", body: html({ title: "Final", image: "https://img.example/ok.png" }) };
+    pages["https://img.example/ok.png"] = { type: "image/png", body: "PUBLIC-IMAGE" };
+    const record = await post("see https://pub.example/moved");
+    expect(requested).not.toContain("https://pub.example/final");
+    expect(record.embed.external.title).toBe("");
     expect(uploads).toEqual([]);
   });
 
