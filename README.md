@@ -77,7 +77,6 @@ x-to-bsky/
 ├── options.html/js      # Options page (credentials, selectors)
 ├── icons/               # Extension icons
 ├── build.sh             # zip packaging
-├── docs/security-audit.md # Security audit report
 └── README.md
 ```
 
@@ -87,7 +86,6 @@ x-to-bsky/
 - The only destination is `bsky.social` (with link cards enabled, the OGP metadata and thumbnail of the target URL are also fetched)
 - The App Password can be revoked at any time in Bluesky's settings
 - Every source file is public. No third-party dependencies
-- See [docs/security-audit.md](docs/security-audit.md) for details
 
 ## Known limitations
 
@@ -108,4 +106,4 @@ This extension is an open-source project intended for personal use. Please note 
 - **Bluesky**: authentication currently uses an App Password, but Bluesky recommends moving to OAuth. App Passwords may be restricted in the future.
 - **Link cards**: when generating a link card, the extension fetches the target site's OGP metadata and thumbnail image and uploads them to Bluesky. Rehosting thumbnail images may conflict with each site's terms of use. You can turn thumbnails off in the settings (title only).
 
-Use this extension at your own risk. Check each platform's terms of use and use it with an understanding of the risks. For details, see the "Terms of Service risk analysis" section of [docs/security-audit.md](docs/security-audit.md).
+Use this extension at your own risk. Check each platform's terms of use and use it with an understanding of the risks.
