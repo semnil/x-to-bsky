@@ -274,6 +274,78 @@ function extractFirstUrl(text) {
   return cleanUrlMatch(m[0]);
 }
 
+// ─── Fetch Destinations ─────────────────────────────────
+
+// [network address, prefix length] of the IPv4 ranges on the user's own machine or local network:
+// unspecified, private, shared (CGNAT), loopback, link-local.
+const LOCAL_IPV4_RANGES = [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.168.0.0", 16],
+];
+
+/**
+ * Convert a dotted-quad IPv4 address to its 32-bit value.
+ */
+function ipv4ToNumber(ip) {
+  return ip.split(".").reduce((n, octet) => n * 256 + Number(octet), 0);
+}
+
+/**
+ * Whether a dotted-quad IPv4 address is in one of LOCAL_IPV4_RANGES.
+ */
+function isLocalIpv4(ip) {
+  const n = ipv4ToNumber(ip);
+  return LOCAL_IPV4_RANGES.some(([base, bits]) => {
+    const size = 2 ** (32 - bits);
+    return Math.floor(n / size) === Math.floor(ipv4ToNumber(base) / size);
+  });
+}
+
+/**
+ * Whether an IPv6 address, in the form the URL parser serializes it (hex groups, "::" compression),
+ * is loopback, unspecified, link-local, site-local, unique-local, or an IPv4-mapped / IPv4-compatible
+ * form of a local IPv4 address.
+ */
+function isLocalIpv6(ip) {
+  const [head, tail] = ip.split("::");
+  const front = head ? head.split(":") : [];
+  const back = tail === undefined ? [] : (tail ? tail.split(":") : []);
+  const groups = [...front, ...Array(8 - front.length - back.length).fill("0"), ...back].map((g) => parseInt(g, 16));
+  if ((groups[0] & 0xfe00) === 0xfc00) return true; // fc00::/7
+  if ((groups[0] & 0xffc0) === 0xfe80) return true; // fe80::/10
+  if ((groups[0] & 0xffc0) === 0xfec0) return true; // fec0::/10
+  if (groups.slice(0, 5).every((g) => g === 0) && (groups[5] === 0 || groups[5] === 0xffff)) {
+    const embeddedIpv4 = [groups[6] >> 8, groups[6] & 0xff, groups[7] >> 8, groups[7] & 0xff].join(".");
+    return isLocalIpv4(embeddedIpv4); // ::/96 (incl. :: and ::1) and ::ffff:0:0/96
+  }
+  return false;
+}
+
+/**
+ * Whether a URL is an http(s) URL whose host, as written in the URL, is outside the user's own machine
+ * and local network. Rejects other schemes, unparsable URLs, localhost and *.localhost, *.local,
+ * single-label host names, and IP literals in the ranges of isLocalIpv4 / isLocalIpv6.
+ */
+function isPublicHttpUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, "");
+  if (host.startsWith("[")) return !isLocalIpv6(host.slice(1, -1));
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return !isLocalIpv4(host);
+  if (!host.includes(".")) return false;
+  return !host.endsWith(".localhost") && !host.endsWith(".local");
+}
+
 // ─── Image Utilities ────────────────────────────────────
 
 /**
@@ -318,4 +390,5 @@ export {
   parseFacets,
   extractFirstUrl,
   calcCoverRect,
+  isPublicHttpUrl,
 };

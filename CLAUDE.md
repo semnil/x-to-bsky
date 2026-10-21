@@ -24,6 +24,7 @@ x-to-bsky/
 ├── .github/workflows/   # GitHub Actions workflows
 ├── build.sh             # zip packaging
 ├── test/lib.test.js     # Vitest unit tests (lib.js)
+├── test/background.test.js # Vitest: link card fetch destinations, with background.js driven through its message listener and chrome / fetch stubbed
 ├── test/icons.test.js   # Vitest: the UI files contain no emoji, and the icon names they use exist in shared.js
 ├── test/i18n.test.js    # Vitest: popup.html / options.html / content.js use only messages that exist in Japanese and English, the pages show Japanese only as the fallback of translated elements, and every error code thrown in background.js has a message
 ├── test/release.test.js # Vitest: structure of the Release / Tag release workflows and the scripts in tools/
@@ -78,7 +79,7 @@ sequenceDiagram
 - `uploadThumbnail(imageUrl, accessJwt)`: downloads an image URL and uploads it to Bluesky. Images over 1MB are shrunk with `downscaleToJpeg` before sending (because the Bluesky lexicon limits `embed.external.thumb` to 1,000,000 bytes)
 - `downscaleToJpeg(buf, contentType)`: resizes to 1000px or less with `createImageBitmap` + `OffscreenCanvas` + `convertToBlob` and re-encodes as JPEG (quality lowered step by step from 0.85 to 0.4). Works in a Service Worker too. Returns null when it cannot fit in 1MB, falling back to no thumbnail
 - `fetchYouTubeOEmbed(videoUrl)`: gets the title, author and thumbnail URL from YouTube oEmbed
-- `buildLinkEmbed(url, accessJwt, includeThumbnail = true)`: builds a link card (`app.bsky.embed.external`). YouTube URLs (`YOUTUBE_RE`) get the title, description and thumbnail from oEmbed, other URLs from OGP metadata. When `includeThumbnail` is false, no thumbnail is attached
+- `buildLinkEmbed(url, accessJwt, includeThumbnail = true)`: builds a link card (`app.bsky.embed.external`). YouTube URLs (`YOUTUBE_RE`) get the title, description and thumbnail from oEmbed, other URLs from OGP metadata. When `includeThumbnail` is false, no thumbnail is attached. The page and the thumbnail are fetched only when their URL passes `isPublicHttpUrl`, with `redirect: "error"` (a page or thumbnail that redirects gives no card data or thumbnail), and a thumbnail response that is not `image/*` is not uploaded
 - `createPost(text, images, parent, root, sess, urlEntries)`: supports image embeds, link cards and the reply chain. `sess` is the session reused within a thread, `urlEntries` is the list of shortened URLs from `shortenUrlsInText`
 - `postThread(thread)`: thread posting with URL shortening + automatic splitting + reply chain
 - Message handlers: `POST_TO_BSKY`, `TEST_LOGIN`, `GET_STATUS`
@@ -92,6 +93,7 @@ sequenceDiagram
 - `parseFacets(text)`: no lookbehind. Detects boundaries with `(^|\s)` and corrects the offsets
 - `extractFirstUrl(text)`: finds the first URL in the text (removing trailing punctuation)
 - `calcCoverRect(nw, nh, dw, dh, objectPosition)`: computes the visible-area crop for `object-fit: cover` (pure function; the same algorithm as `getVisibleRect` in content.js)
+- `isPublicHttpUrl(url)`: whether a URL is http(s) with a host, as written in the URL, outside the user's machine and local network. Rejects `localhost` / `*.localhost` / `*.local`, single-label names, and IP literals in the unspecified, private, shared (CGNAT), loopback, link-local, site-local and unique-local ranges, including IPv4-mapped IPv6
 
 ### Credential storage
 
@@ -120,7 +122,7 @@ sequenceDiagram
 - **Threads**: posts become a reply chain on Bluesky only when several posts are created at once with X's "+" button. Adding to a thread by replying to an existing post is not supported, because the corresponding parent post on Bluesky cannot be identified
 - **Quote reposts**: by default only the comment text is posted. Enabling it in "Post Options" on the options page appends the X link of the quoted post to the end of the text
 - **Replies**: replies to existing posts are not cross-posted to Bluesky by default. Enabling "Post replies to Bluesky" in "Post Options" on the options page cross-posts the reply text too, as an independent new post (it does not become a reply chain on Bluesky and is not tied to the post replied to on X)
-- **Link cards**: for a post that contains a URL and has no image, a link card with a thumbnail is generated automatically from OGP metadata. Pages without OGP tags use the HTML `<title>` / `<meta name="description">` instead, and fall back to a card without a title if no title can be obtained. Disabled by default; web access permission is granted all at once when it is enabled on the options page (removed automatically when disabled). Domains that are not permitted are posted without a card
+- **Link cards**: for a post that contains a URL and has no image, a link card with a thumbnail is generated automatically from OGP metadata. Pages without OGP tags use the HTML `<title>` / `<meta name="description">` instead, and fall back to a card without a title if no title can be obtained. Disabled by default; web access permission is granted all at once when it is enabled on the options page (removed automatically when disabled). Domains that are not permitted are posted without a card. URLs whose host is written as localhost, a local name or a local IP address (the ones `isPublicHttpUrl` rejects) get no card data and no thumbnail, and so do pages and thumbnails that redirect
 - **Reposts**: they involve no text input, so the extension does nothing (intended)
 
 ## How to test
