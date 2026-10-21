@@ -13,6 +13,7 @@ import {
   parseFacets,
   extractFirstUrl,
   calcCoverRect,
+  isPublicHttpUrl,
 } from "../lib.js";
 
 // Helper: compute UTF-8 byte length of a string
@@ -688,5 +689,90 @@ describe("extractFirstUrl", () => {
     // The regex stops at > so the URL should still be extracted but < stops it
     expect(extractFirstUrl("Visit <https://example.com> please"))
       .toBe("https://example.com");
+  });
+});
+
+// ─── isPublicHttpUrl ──────────────────────────────────
+
+describe("isPublicHttpUrl", () => {
+  it.each([
+    "https://example.com/page",
+    "http://example.com/",
+    "https://sub.example.co.jp/a.png",
+    "https://8.8.8.8/",
+    "http://1.0.0.0/",
+    "http://9.255.255.255/",
+    "http://11.0.0.0/",
+    "http://100.63.255.255/",
+    "http://100.128.0.0/",
+    "http://126.255.255.255/",
+    "http://128.0.0.0/",
+    "http://169.253.255.255/",
+    "http://169.255.0.0/",
+    "http://172.15.255.255/",
+    "http://172.32.0.0/",
+    "http://192.167.255.255/",
+    "http://192.169.0.0/",
+    "http://[2001:4860:4860::8888]/",
+    "http://[fe7f::1]/",
+    "http://[fbff::1]/",
+    "http://[::ffff:8.8.8.8]/",
+  ])("accepts %s", (url) => {
+    expect(isPublicHttpUrl(url)).toBe(true);
+  });
+
+  it.each([
+    // unspecified, private, shared (CGNAT), loopback, link-local IPv4, at both ends of each range
+    "http://0.0.0.0/",
+    "http://0.255.255.255/",
+    "http://10.0.0.0/",
+    "http://10.255.255.255/",
+    "http://100.64.0.0/",
+    "http://100.127.255.255/",
+    "http://127.0.0.1/",
+    "http://127.255.255.255/",
+    "http://169.254.0.0/",
+    "http://169.254.255.255/",
+    "http://172.16.0.0/",
+    "http://172.31.255.255/",
+    "http://192.168.0.0/",
+    "http://192.168.255.255:8080/a.jpg",
+    // IPv4 spellings the URL parser turns into 127.0.0.1
+    "http://2130706433/",
+    "http://0x7f.1/",
+    "http://127.1/",
+    "http://127.0.0.1./",
+    // IPv6 loopback, unspecified, link-local, site-local, unique-local, IPv4-mapped and IPv4-compatible
+    "http://[::1]/",
+    "http://[::]/",
+    "http://[fe80::1]/",
+    "http://[febf::1]/",
+    "http://[fec0::1]/",
+    "http://[fc00::1]/",
+    "http://[fdff::1]/",
+    "http://[::ffff:127.0.0.1]/",
+    "http://[::ffff:192.168.1.1]/",
+    "http://[::127.0.0.1]/",
+    // names for this machine or the local network
+    "http://localhost/",
+    "http://LOCALHOST:3000/",
+    "http://localhost./",
+    "http://app.localhost/",
+    "http://printer.local/",
+    "http://intranet/",
+  ])("rejects %s", (url) => {
+    expect(isPublicHttpUrl(url)).toBe(false);
+  });
+
+  it.each([
+    "ftp://example.com/",
+    "file:///etc/hosts",
+    "data:image/png;base64,AAAA",
+    "javascript:void(0)",
+    "chrome-extension://abc/page.html",
+    "not a url",
+    "",
+  ])("rejects non-http(s) or unparsable %s", (url) => {
+    expect(isPublicHttpUrl(url)).toBe(false);
   });
 });

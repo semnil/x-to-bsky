@@ -7,6 +7,7 @@ import {
   parseFacets,
   FACET_MENTION,
   extractFirstUrl,
+  isPublicHttpUrl,
 } from "./lib.js";
 
 const BSKY_SERVICE = "https://bsky.social";
@@ -216,14 +217,16 @@ async function downscaleToJpeg(buf, contentType) {
 /**
  * Download an image URL and upload it to Bluesky as a thumbnail blob.
  * If the source exceeds the lexicon limit, re-encode it to a JPEG that fits.
- * Returns the blob reference or null on failure.
+ * Returns the blob reference, or null on failure, for a response that is not image/*,
+ * or when the response's final URL (after redirects) fails isPublicHttpUrl.
  */
 async function uploadThumbnail(imageUrl, accessJwt) {
   try {
     const imgRes = await fetch(imageUrl);
-    if (!imgRes.ok) return null;
-    let bytes = new Uint8Array(await imgRes.arrayBuffer());
+    if (!imgRes.ok || !isPublicHttpUrl(imgRes.url || imageUrl)) return null;
     let contentType = imgRes.headers.get("content-type") || "image/jpeg";
+    if (!contentType.toLowerCase().startsWith("image/")) return null;
+    let bytes = new Uint8Array(await imgRes.arrayBuffer());
 
     if (bytes.byteLength > MAX_BLOB_BYTES) {
       const shrunk = await downscaleToJpeg(bytes, contentType);
@@ -315,6 +318,7 @@ function parseOgpFromHtml(html) {
 /**
  * Fetch OGP metadata from a URL.
  * Reads only the first ~32 KB (up to </head>) to minimise bandwidth.
+ * Returns null when the response's final URL (after redirects) fails isPublicHttpUrl.
  */
 async function fetchOgpMetadata(url) {
   try {
@@ -327,7 +331,7 @@ async function fetchOgpMetadata(url) {
       signal: controller.signal,
     });
 
-    if (!res.ok) { clearTimeout(timeoutId); return null; }
+    if (!res.ok || !isPublicHttpUrl(res.url || url)) { clearTimeout(timeoutId); return null; }
     const ct = res.headers.get("content-type") || "";
     if (!ct.includes("text/html") && !ct.includes("application/xhtml")) {
       clearTimeout(timeoutId);
@@ -381,7 +385,8 @@ async function hasHostPermission(url) {
 /**
  * Build an app.bsky.embed.external for any URL.
  * Uses YouTube oEmbed as a fast path; falls back to generic OGP fetch.
- * Checks host permission before fetching; skips if not granted.
+ * Fetches the page and the thumbnail only when the URL passes isPublicHttpUrl and host
+ * permission is granted; skips them otherwise.
  */
 async function buildLinkEmbed(url, accessJwt, includeThumbnail = true) {
   let title = "";
@@ -399,7 +404,7 @@ async function buildLinkEmbed(url, accessJwt, includeThumbnail = true) {
       }
     }
   } else {
-    if (await hasHostPermission(url)) {
+    if (isPublicHttpUrl(url) && await hasHostPermission(url)) {
       const ogp = await fetchOgpMetadata(url);
       if (ogp) {
         title = ogp.title;
@@ -414,7 +419,7 @@ async function buildLinkEmbed(url, accessJwt, includeThumbnail = true) {
     external: { uri: url, title, description },
   };
 
-  if (includeThumbnail && imageUrl && await hasHostPermission(imageUrl)) {
+  if (includeThumbnail && imageUrl && isPublicHttpUrl(imageUrl) && await hasHostPermission(imageUrl)) {
     const thumbBlob = await uploadThumbnail(imageUrl, accessJwt);
     if (thumbBlob) embed.external.thumb = thumbBlob;
   }
