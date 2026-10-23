@@ -127,6 +127,15 @@ sequenceDiagram
 
 ## How to test
 
+Automated tests (what CI runs on every push and pull request to master):
+
+```bash
+npm install   # first time only
+npm test      # vitest run — lib unit tests plus the icon / i18n / workflow-structure checks
+```
+
+Manual testing in the browser:
+
 1. Install from the Chrome Web Store, or `chrome://extensions` → Developer mode → load the folder
 2. Set the Bluesky App Password on the options page → Test Connection
 3. Make a test post on x.com → check the post on Bluesky
