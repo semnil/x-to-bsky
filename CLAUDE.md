@@ -79,7 +79,7 @@ sequenceDiagram
 - `uploadThumbnail(imageUrl, accessJwt)`: downloads an image URL and uploads it to Bluesky. Images over 1MB are shrunk with `downscaleToJpeg` before sending (because the Bluesky lexicon limits `embed.external.thumb` to 1,000,000 bytes)
 - `downscaleToJpeg(buf, contentType)`: resizes to 1000px or less with `createImageBitmap` + `OffscreenCanvas` + `convertToBlob` and re-encodes as JPEG (quality lowered step by step from 0.85 to 0.4). Works in a Service Worker too. Returns null when it cannot fit in 1MB, falling back to no thumbnail
 - `fetchYouTubeOEmbed(videoUrl)`: gets the title, author and thumbnail URL from YouTube oEmbed
-- `buildLinkEmbed(url, accessJwt, includeThumbnail = true)`: builds a link card (`app.bsky.embed.external`). YouTube URLs (`YOUTUBE_RE`) get the title, description and thumbnail from oEmbed, other URLs from OGP metadata. When `includeThumbnail` is false, no thumbnail is attached. The page and the thumbnail are fetched only when their URL passes `isPublicHttpUrl`, with `redirect: "error"` (a page or thumbnail that redirects gives no card data or thumbnail), and a thumbnail response that is not `image/*` is not uploaded
+- `buildLinkEmbed(url, accessJwt, includeThumbnail = true)`: builds a link card (`app.bsky.embed.external`). YouTube URLs (`YOUTUBE_RE`) get the title, description and thumbnail from oEmbed, other URLs from OGP metadata. When `includeThumbnail` is false, no thumbnail is attached. The page and the thumbnail are fetched only when their URL passes `isPublicHttpUrl` and `hasHostPermission`, with `redirect: "error"` (a page or thumbnail that redirects gives no card data or thumbnail), and a thumbnail response that is not `image/*` is not uploaded
 - `createPost(text, images, parent, root, sess, urlEntries)`: supports image embeds, link cards and the reply chain. `sess` is the session reused within a thread, `urlEntries` is the list of shortened URLs from `shortenUrlsInText`
 - `postThread(thread)`: thread posting with URL shortening + automatic splitting + reply chain
 - Message handlers: `POST_TO_BSKY`, `TEST_LOGIN`, `GET_STATUS`
@@ -94,13 +94,14 @@ sequenceDiagram
 - `extractFirstUrl(text)`: finds the first URL in the text (removing trailing punctuation)
 - `calcCoverRect(nw, nh, dw, dh, objectPosition)`: computes the visible-area crop for `object-fit: cover` (pure function; the same algorithm as `getVisibleRect` in content.js)
 - `isPublicHttpUrl(url)`: whether a URL is http(s) with a host, as written in the URL, outside the user's machine and local network. Rejects `localhost` / `*.localhost` / `*.local`, single-label names, and IP literals in the unspecified, private, shared (CGNAT), loopback, link-local, site-local and unique-local ranges, including IPv4-mapped IPv6
+- `isWebStoreUrl(url)`: whether a URL is https on a Chrome Web Store host (`WEB_STORE_HOSTS`: `chrome.google.com`, `chromewebstore.google.com`) or a subdomain of one. Chrome blocks extension requests to these whatever host permissions the extension holds, while `chrome.permissions.contains` still reports `<all_urls>` as covering them
 
 ### Credential storage
 
 - `bskyHandle`, `bskyAppPassword`, `crosspostEnabled`, `customSelectors`, `includeQuoteUrl`, `postReplies`, `includeLinkCard` and `linkCardThumbnail` are saved in `chrome.storage.local`
 - Uses an App Password (not the main password; OAuth is not used)
 - `host_permissions`: `bsky.social`, `*.bsky.network`
-- `optional_host_permissions`: `<all_urls>` — web access permission is granted all at once when the link card feature is enabled on the options page, and removed automatically when it is disabled. background.js checks the permission with `hasHostPermission()` at posting time and posts without a card for domains that are not permitted
+- `optional_host_permissions`: `<all_urls>` — web access permission is granted all at once when the link card feature is enabled on the options page, and removed automatically when it is disabled. background.js checks the permission with `hasHostPermission()` at posting time and posts without a card for domains that are not permitted. `hasHostPermission()` returns false for Chrome Web Store URLs (`isWebStoreUrl`)
 
 ## Coding conventions
 
@@ -122,7 +123,7 @@ sequenceDiagram
 - **Threads**: posts become a reply chain on Bluesky only when several posts are created at once with X's "+" button. Adding to a thread by replying to an existing post is not supported, because the corresponding parent post on Bluesky cannot be identified
 - **Quote reposts**: by default only the comment text is posted. Enabling it in "Post Options" on the options page appends the X link of the quoted post to the end of the text
 - **Replies**: replies to existing posts are not cross-posted to Bluesky by default. Enabling "Post replies to Bluesky" in "Post Options" on the options page cross-posts the reply text too, as an independent new post (it does not become a reply chain on Bluesky and is not tied to the post replied to on X)
-- **Link cards**: for a post that contains a URL and has no image, a link card with a thumbnail is generated automatically from OGP metadata. Pages without OGP tags use the HTML `<title>` / `<meta name="description">` instead, and fall back to a card without a title if no title can be obtained. Disabled by default; web access permission is granted all at once when it is enabled on the options page (removed automatically when disabled). Domains that are not permitted are posted without a card. URLs whose host is written as localhost, a local name or a local IP address (the ones `isPublicHttpUrl` rejects) get no card data and no thumbnail, and so do pages and thumbnails that redirect
+- **Link cards**: for a post that contains a URL and has no image, a link card with a thumbnail is generated automatically from OGP metadata. Pages without OGP tags use the HTML `<title>` / `<meta name="description">` instead, and fall back to a card without a title if no title can be obtained. Disabled by default; web access permission is granted all at once when it is enabled on the options page (removed automatically when disabled). Domains that are not permitted are posted without a card. URLs whose host is written as localhost, a local name or a local IP address (the ones `isPublicHttpUrl` rejects) get no card data and no thumbnail, and so do pages and thumbnails that redirect. Chrome Web Store URLs (the ones `isWebStoreUrl` matches) are not fetched either, and get no card data and no thumbnail
 - **Reposts**: they involve no text input, so the extension does nothing (intended)
 
 ## How to test
