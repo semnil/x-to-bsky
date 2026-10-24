@@ -28,6 +28,7 @@ x-to-bsky/
 ├── test/icons.test.js   # Vitest: the UI files contain no emoji, and the icon names they use exist in shared.js
 ├── test/i18n.test.js    # Vitest: popup.html / options.html / content.js use only messages that exist in Japanese and English, the pages show Japanese only as the fallback of translated elements, and every error code thrown in background.js has a message
 ├── test/release.test.js # Vitest: structure of the Release / Tag release workflows and the scripts in tools/
+├── test/contrast.test.js # Vitest: WCAG 2.1 contrast of the color pairs the stylesheets declare: toast and options button text 4.5:1, toggle knob against the ON track 3:1
 ├── test/badge.test.js   # Vitest: content.js / content.css run in headless Chrome on a stand-in post button; the badge is filled with the page's background color and follows it. Chrome is taken from CHROME_PATH or the usual install path, and the cases are skipped by name without one
 ├── tools/check-tag.sh   # Release: decides whether to release from whether the run is on a tag and from the tag name
 ├── tools/tag-plan.sh    # Tag release: prints the tag to put on a master commit that moved the version
@@ -133,7 +134,7 @@ Automated tests (what CI runs on every push and pull request to master):
 
 ```bash
 npm install   # first time only
-npm test      # vitest run — lib unit tests plus the icon / i18n / workflow-structure checks and the badge in headless Chrome
+npm test      # vitest run — lib unit tests plus the icon / i18n / contrast / workflow-structure checks and the badge in headless Chrome
 ```
 
 Manual testing in the browser:
