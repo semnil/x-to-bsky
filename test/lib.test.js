@@ -14,6 +14,7 @@ import {
   extractFirstUrl,
   calcCoverRect,
   isPublicHttpUrl,
+  isWebStoreUrl,
 } from "../lib.js";
 
 // Helper: compute UTF-8 byte length of a string
@@ -774,5 +775,37 @@ describe("isPublicHttpUrl", () => {
     "",
   ])("rejects non-http(s) or unparsable %s", (url) => {
     expect(isPublicHttpUrl(url)).toBe(false);
+  });
+});
+
+// ─── isWebStoreUrl ────────────────────────────────────
+
+describe("isWebStoreUrl", () => {
+  it.each([
+    "https://chromewebstore.google.com/detail/abcdefghijklmnopabcdefghijklmnop?utm_source=item-share-x",
+    "https://chromewebstore.google.com/",
+    "https://CHROMEWEBSTORE.Google.com/",
+    "https://chromewebstore.google.com:8443/",
+    "https://sub.chromewebstore.google.com/",
+    "https://chrome.google.com/webstore/detail/abcdefghijklmnopabcdefghijklmnop",
+    "https://chrome.google.com/",
+    "https://sub.chrome.google.com/",
+  ])("matches %s", (url) => {
+    expect(isWebStoreUrl(url)).toBe(true);
+  });
+
+  it.each([
+    "http://chromewebstore.google.com/",
+    "http://chrome.google.com/webstore",
+    "https://chromewebstore.google.com./",
+    "https://www.google.com/",
+    "https://google.com/",
+    "https://notchromewebstore.google.com/",
+    "https://chromewebstore.google.com.example/",
+    "https://example.com/chromewebstore.google.com/",
+    "not a url",
+    "",
+  ])("does not match %s", (url) => {
+    expect(isWebStoreUrl(url)).toBe(false);
   });
 });
