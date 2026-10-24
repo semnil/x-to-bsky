@@ -116,6 +116,25 @@ describe("link card destinations", () => {
     expect(record.embed.external.title).toBe("");
   });
 
+  it("does not fetch a linked page on the Chrome Web Store", async () => {
+    const url = "https://chromewebstore.google.com/detail/abcdefghijklmnopabcdefghijklmnop?utm_source=item-share-x";
+    pages[url] = { type: "text/html", body: html({ title: "Store page" }) };
+    const record = await post(`see ${url}`);
+    expect(requested).not.toContain(url);
+    expect(record.embed.external.uri).toBe(url);
+    expect(record.embed.external.title).toBe("");
+  });
+
+  it("does not fetch a thumbnail on the Chrome Web Store", async () => {
+    pages["https://pub.example/page"] = { type: "text/html", body: html({ title: "Page", image: "https://chrome.google.com/webstore/a.png" }) };
+    pages["https://chrome.google.com/webstore/a.png"] = { type: "image/png", body: "STORE-IMAGE" };
+    const record = await post("see https://pub.example/page");
+    expect(requested).not.toContain("https://chrome.google.com/webstore/a.png");
+    expect(record.embed.external.title).toBe("Page");
+    expect(record.embed.external.thumb).toBeUndefined();
+    expect(uploads).toEqual([]);
+  });
+
   it("does not follow a linked page's redirect to a private address", async () => {
     pages["https://pub.example/moved"] = { redirectTo: "http://10.0.0.5/" };
     pages["http://10.0.0.5/"] = { type: "text/html", body: html({ title: "Local page" }) };

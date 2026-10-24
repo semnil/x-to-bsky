@@ -8,6 +8,7 @@ import {
   FACET_MENTION,
   extractFirstUrl,
   isPublicHttpUrl,
+  isWebStoreUrl,
 } from "./lib.js";
 
 const BSKY_SERVICE = "https://bsky.social";
@@ -372,8 +373,10 @@ async function fetchOgpMetadata(url) {
 
 /**
  * Check if the extension has host permission for a URL's origin.
+ * Returns false for a Chrome Web Store URL (isWebStoreUrl).
  */
 async function hasHostPermission(url) {
+  if (isWebStoreUrl(url)) return false;
   try {
     const origin = new URL(url).origin + "/*";
     return await chrome.permissions.contains({ origins: [origin] });
@@ -385,8 +388,8 @@ async function hasHostPermission(url) {
 /**
  * Build an app.bsky.embed.external for any URL.
  * Uses YouTube oEmbed as a fast path; falls back to generic OGP fetch.
- * Fetches the page and the thumbnail only when the URL passes isPublicHttpUrl and host
- * permission is granted, without following redirects; skips them otherwise.
+ * Fetches the page and the thumbnail only when the URL passes isPublicHttpUrl and
+ * hasHostPermission, without following redirects; skips them otherwise.
  */
 async function buildLinkEmbed(url, accessJwt, includeThumbnail = true) {
   let title = "";

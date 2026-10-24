@@ -346,6 +346,24 @@ function isPublicHttpUrl(url) {
   return !host.endsWith(".localhost") && !host.endsWith(".local");
 }
 
+// Hosts of the Chrome Web Store. Chrome blocks extension requests to https URLs on these hosts and their
+// subdomains, whatever host permissions the extension holds.
+const WEB_STORE_HOSTS = ["chrome.google.com", "chromewebstore.google.com"];
+
+/**
+ * Whether a URL is an https URL on one of WEB_STORE_HOSTS or a subdomain of one.
+ */
+function isWebStoreUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:") return false;
+  return WEB_STORE_HOSTS.some((host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`));
+}
+
 // ─── Image Utilities ────────────────────────────────────
 
 /**
@@ -391,4 +409,5 @@ export {
   extractFirstUrl,
   calcCoverRect,
   isPublicHttpUrl,
+  isWebStoreUrl,
 };
