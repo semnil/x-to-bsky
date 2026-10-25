@@ -430,7 +430,7 @@
 
   /**
    * Show the badge on every post button while crossposting is active,
-   * and remove all badges otherwise.
+   * and remove all badges otherwise. Each badge is filled with the page's background color.
    */
   function syncBadges() {
     if (!enabled || !configured) {
@@ -438,6 +438,12 @@
       return;
     }
     document.querySelectorAll(selectors.postButton).forEach(injectBadge);
+    const ground = getComputedStyle(document.body).backgroundColor;
+    document.querySelectorAll(".xtobsky-badge").forEach((badge) => {
+      if (badge.style.getPropertyValue("--xtobsky-ground") !== ground) {
+        badge.style.setProperty("--xtobsky-ground", ground);
+      }
+    });
   }
 
   // Debounced MutationObserver — x.com mutates the DOM heavily,

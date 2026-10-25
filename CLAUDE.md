@@ -28,6 +28,8 @@ x-to-bsky/
 ├── test/icons.test.js   # Vitest: the UI files contain no emoji, and the icon names they use exist in shared.js
 ├── test/i18n.test.js    # Vitest: popup.html / options.html / content.js use only messages that exist in Japanese and English, the pages show Japanese only as the fallback of translated elements, and every error code thrown in background.js has a message
 ├── test/release.test.js # Vitest: structure of the Release / Tag release workflows and the scripts in tools/
+├── test/contrast.test.js # Vitest: WCAG 2.1 contrast of the color pairs the stylesheets declare: toast and options button text 4.5:1, toggle knob against the ON track 3:1
+├── test/badge.test.js   # Vitest: content.js / content.css run in headless Chrome on a stand-in post button; the badge is filled with the page's background color and follows it. Chrome is taken from CHROME_PATH or the usual install path, and the cases are skipped by name without one
 ├── tools/check-tag.sh   # Release: decides whether to release from whether the run is on a tag and from the tag name
 ├── tools/tag-plan.sh    # Tag release: prints the tag to put on a master commit that moved the version
 ├── tools/verify-version.sh # Release: checks that the tag matches version / version_name in manifest.json
@@ -63,7 +65,7 @@ sequenceDiagram
 - Image extraction: captures the `<img>` elements near the textarea as base64 through a canvas (synchronous). Images with `object-fit: cover` are cropped to the visible area with `getVisibleRect()` before capture. The capture result includes `width`/`height`, which are sent to Bluesky as the AT Protocol `aspectRatio` field
 - Fallback: `.DraftEditor-root [data-text="true"]`
 - Reply detection: `isReplyContext()` detects whether the post is a reply to an existing post (in the modal, by the presence of the replied-to tweet `[data-testid="tweet"]`, with quote reposts excluded; the inline compose on a `/status/` page counts as a reply). When `postReplies` is OFF (the default), replies are not cross-posted
-- A badge with the butterfly SVG icon (`createIcon("butterfly")`) is added to the post buttons dynamically with a MutationObserver. It is shown only when crossposting is ON and credentials are set, and the badges on existing buttons are also added or removed when `crosspostEnabled` / `bskyHandle` / `customSelectors` change
+- A badge with the butterfly SVG icon (`createIcon("butterfly")`) is added to the post buttons dynamically with a MutationObserver. It is shown only when crossposting is ON and credentials are set, and the badges on existing buttons are also added or removed when `crosspostEnabled` / `bskyHandle` / `customSelectors` change. The badge is a disc with a `#0085ff` border over the button's top-right corner, filled with the page's background color: `syncBadges()` reads `document.body`'s background color and sets it as `--xtobsky-ground` on every badge, so the fill follows a theme change at the next DOM change. The badge sits inside the button, so it takes the opacity X gives a disabled button
 - A toast notification shows the result of the Bluesky post (success: blue + check SVG icon, failure: red, with the number of thread posts). The toast texts and the badge title are in Japanese or English by `UI_LANG`, and an error from background.js is shown with `errorText()`
 - Initial state: read directly with `chrome.storage.local.get` (no service worker startup needed). `storage.onChanged` keeps every setting in sync in real time
 - Service worker startup: `sendMessageWithWakeup()` pings with `GET_STATUS` before sending the actual message. Has a 1-second timeout fallback. Non-idempotent messages are not retried
@@ -132,7 +134,7 @@ Automated tests (what CI runs on every push and pull request to master):
 
 ```bash
 npm install   # first time only
-npm test      # vitest run — lib unit tests plus the icon / i18n / workflow-structure checks
+npm test      # vitest run — lib unit tests plus the icon / i18n / contrast / workflow-structure checks and the badge in headless Chrome
 ```
 
 Manual testing in the browser:

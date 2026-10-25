@@ -25,7 +25,7 @@
 }
 
 .xtobsky-toast--success {
-  background-color: #0085ff;
+  background-color: #0070dd;
 }
 
 .xtobsky-toast--error {
@@ -41,8 +41,17 @@
 
 .xtobsky-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
+  top: -8px;
+  right: -6px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #0085ff;
+  border-radius: 50%;
+  background-color: var(--xtobsky-ground);
   line-height: 0;
   color: #0085ff;
   pointer-events: none;
@@ -50,6 +59,6 @@
 }
 
 .xtobsky-badge .xtobsky-icon {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
