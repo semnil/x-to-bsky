@@ -155,7 +155,7 @@ chrome.storage.local.get(
 );
 
 function updateLinkCardSubToggle() {
-  linkCardThumbnailToggle.closest(".row").style.opacity = includeLinkCardToggle.checked ? "1" : "0.4";
+  linkCardThumbnailToggle.closest(".row").style.opacity = includeLinkCardToggle.checked ? "1" : "0.8";
   linkCardThumbnailToggle.disabled = !includeLinkCardToggle.checked;
 }
 

@@ -26,6 +26,7 @@ x-to-bsky/
 ├── test/lib.test.js     # Vitest unit tests (lib.js)
 ├── test/background.test.js # Vitest: link card fetch destinations, with background.js driven through its message listener and chrome / fetch stubbed
 ├── test/icons.test.js   # Vitest: the UI files contain no emoji, and the icon names they use exist in shared.js
+├── test/hints.test.js   # Vitest: every element of class `hint` in popup.html / options.html gets the same font size and color declared in the page itself (its `<style>` rules or a style attribute), read from the markup without a browser; the thumbnail hint keeps 3:1 on the page background at the opacity options.js gives its row while link cards are off
 ├── test/i18n.test.js    # Vitest: popup.html / options.html / content.js use only messages that exist in Japanese and English, the pages show Japanese only as the fallback of translated elements, and every error code thrown in background.js has a message
 ├── test/release.test.js # Vitest: structure of the Release / Tag release workflows and the scripts in tools/
 ├── test/contrast.test.js # Vitest: WCAG 2.1 contrast of the color pairs the stylesheets declare: toast and options button text 4.5:1, toggle knob against the ON track 3:1
