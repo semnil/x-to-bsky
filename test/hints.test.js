@@ -3,7 +3,8 @@ import fs from "node:fs";
 
 // Every element of class "hint" on the extension pages gets a font size and a color declared in the
 // page itself (its <style> rules or a style attribute), the same for all of them, rather than
-// inheriting the page's text style.
+// inheriting the page's text style. The thumbnail hint, in the row options.js dims while link cards
+// are off, keeps 3:1 on the page background.
 
 const PAGES = ["popup.html", "options.html"];
 const VOID = new Set(["br", "hr", "img", "input", "link", "meta"]);
@@ -121,7 +122,39 @@ describe.each(PAGES)("%s", (file) => {
   });
 });
 
+/** The [r, g, b] of a #rgb / #rrggbb color. */
+function rgbOf(hex) {
+  let h = hex.replace(/^#/, "");
+  if (h.length === 3) h = [...h].map((c) => c + c).join("");
+  if (!/^[0-9a-f]{6}$/i.test(h)) throw new Error(`not a hex color: ${hex}`);
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+}
+
+/** WCAG 2.1 relative luminance of an [r, g, b] color. */
+function luminance(rgb) {
+  const [r, g, b] = rgb.map((c) => {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
 describe("options.html", () => {
+  it("keeps the thumbnail hint at 3:1 on the page while link cards are off and its row is dimmed", () => {
+    const html = fs.readFileSync("options.html", "utf8");
+    const rules = rulesOf(html);
+    const hint = elementsOf(html).find((e) => e.key === "linkCardThumbnailHint");
+    const ink = rgbOf(cascadedValue(hint, rules, "color"));
+    const ground = rgbOf(rules.find((r) => r.selectors.includes("body")).values.background);
+    const opacity = Number(fs.readFileSync("options.js", "utf8").match(
+      /linkCardThumbnailToggle\.closest\("\.row"\)\.style\.opacity = includeLinkCardToggle\.checked \? "1" : "([\d.]+)";/,
+    )?.[1]);
+    expect(opacity, "opacity of the dimmed thumbnail row").toBeGreaterThan(0);
+    const shown = ink.map((c, i) => c * opacity + ground[i] * (1 - opacity));
+    const [lighter, darker] = [luminance(shown), luminance(ground)].sort((a, b) => b - a);
+    expect((lighter + 0.05) / (darker + 0.05)).toBeGreaterThanOrEqual(3);
+  });
+
   it("has hints both in the credential fields and in the toggle rows", () => {
     const hints = elementsOf(fs.readFileSync("options.html", "utf8")).filter((e) => e.classes.includes("hint"));
     const inside = (className) => hints.filter((e) => e.ancestors.some((a) => a.classes.includes(className)));
