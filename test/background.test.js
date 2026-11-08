@@ -6,11 +6,13 @@ import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 const store = {};
 let listener = null;
 let pages = {};
+let handles = {};
+let handleLookups = [];
 const requested = [];
 const uploads = [];
 const records = [];
 
-const json = (obj) => new Response(JSON.stringify(obj), { status: 200, headers: { "content-type": "application/json" } });
+const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
 
 /**
  * A stubbed response for `url`. A page with `redirectTo` redirects there: with `redirect: "error"`
@@ -36,6 +38,13 @@ function post(text) {
       if (!res?.ok) reject(new Error(res?.error));
       else resolve(records.at(-1).record);
     });
+  });
+}
+
+/** Cross-post `text` and return the whole response. */
+function postResponse(text) {
+  return new Promise((resolve) => {
+    listener({ type: "POST_TO_BSKY", thread: [{ text, images: [] }] }, {}, resolve);
   });
 }
 
@@ -77,6 +86,15 @@ beforeAll(async () => {
       records.push(body);
       return json({ uri: `at://${body.repo}/app.bsky.feed.post/1`, cid: "cid" });
     }
+    if (requestUrl.includes("/xrpc/com.atproto.identity.resolveHandle")) {
+      const handle = new URL(requestUrl).searchParams.get("handle");
+      handleLookups.push(handle);
+      const answer = handles[handle];
+      if (answer === "error") throw new TypeError("Failed to fetch");
+      if (answer === "unavailable") return new Response("{}", { status: 503 });
+      if (!answer) return json({ error: "InvalidRequest", message: "Unable to resolve handle" }, 400);
+      return json({ did: answer });
+    }
     return respond(requestUrl, init);
   };
   await import("../background.js");
@@ -84,6 +102,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   pages = {};
+  handles = {};
+  handleLookups = [];
+  delete store.removeInvalidMentions;
   requested.length = 0;
   uploads.length = 0;
   records.length = 0;
@@ -170,5 +191,46 @@ describe("link card destinations", () => {
     const record = await post("see https://pub.example/page");
     expect(record.embed.external.thumb).toBeUndefined();
     expect(uploads).toEqual([]);
+  });
+});
+
+describe("removing mentions that do not exist", () => {
+  const mentionDids = (record) =>
+    (record.facets || []).flatMap((f) => f.features).filter((f) => f.$type === "app.bsky.richtext.facet#mention").map((f) => f.did);
+
+  it("keeps the text as written while the option is off", async () => {
+    const record = await post("hi @ghost.test");
+    expect(record.text).toBe("hi @ghost.test");
+    expect(handleLookups).toEqual(["ghost.test"]);
+  });
+
+  it("removes a mention the service says does not resolve", async () => {
+    store.removeInvalidMentions = true;
+    handles["real.test"] = "did:example:real";
+    const record = await post("hi @ghost.test and @real.test");
+    expect(record.text).toBe("hi and @real.test");
+    expect(mentionDids(record)).toEqual(["did:example:real"]);
+  });
+
+  it("removes a handle that is not a valid handle", async () => {
+    store.removeInvalidMentions = true;
+    const record = await post("@nodots hello");
+    expect(record.text).toBe("hello");
+  });
+
+  it("keeps a mention whose lookup failed", async () => {
+    store.removeInvalidMentions = true;
+    handles["flaky.test"] = "error";
+    handles["down.test"] = "unavailable";
+    const record = await post("@flaky.test @down.test hi");
+    expect(record.text).toBe("@flaky.test @down.test hi");
+  });
+
+  it("fails with a message when no text is left", async () => {
+    store.removeInvalidMentions = true;
+    const res = await postResponse("@ghost.test");
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe("nothingToPost");
+    expect(records).toEqual([]);
   });
 });

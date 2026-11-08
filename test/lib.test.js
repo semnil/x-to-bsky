@@ -11,6 +11,8 @@ import {
   buildShortenedUrlFacets,
   buildByteOffsetMap,
   parseFacets,
+  findMentions,
+  removeMentions,
   extractFirstUrl,
   calcCoverRect,
   isPublicHttpUrl,
@@ -519,6 +521,62 @@ describe("parseFacets", () => {
 });
 
 // ─── calcCoverRect ──────────────────────────────────────
+
+describe("findMentions", () => {
+  it("returns the handle and the index range of each mention", () => {
+    const text = "hi @alice.test and @bob";
+    const found = findMentions(text);
+    expect(found.map((m) => m.handle)).toEqual(["alice.test", "bob"]);
+    expect(found.map((m) => text.slice(m.start, m.end))).toEqual(["@alice.test", "@bob"]);
+  });
+
+  it("ignores an @ that does not follow whitespace or the start", () => {
+    expect(findMentions("mail me at a@b.com")).toEqual([]);
+  });
+
+  it("finds the same mentions as parseFacets", () => {
+    const text = "@a.test x @b.test\n@c";
+    const facets = parseFacets(text).filter((f) => f.features[0].$type === FACET_MENTION);
+    expect(findMentions(text).map((m) => m.handle)).toEqual(facets.map((f) => f.features[0].did));
+  });
+});
+
+describe("removeMentions", () => {
+  const remove = (text, handles) =>
+    removeMentions(text, findMentions(text).filter((m) => handles.includes(m.handle)));
+
+  it("removes a mention in the middle with one of its spaces", () => {
+    expect(remove("hello @ghost world", ["ghost"])).toBe("hello world");
+  });
+
+  it("removes a mention at the start with the spaces after it", () => {
+    expect(remove("@ghost  hello", ["ghost"])).toBe("hello");
+  });
+
+  it("removes a mention at the end with the spaces before it", () => {
+    expect(remove("hello @ghost", ["ghost"])).toBe("hello");
+  });
+
+  it("keeps the line structure when a mention is alone on a line", () => {
+    expect(remove("hello\n@ghost\nworld", ["ghost"])).toBe("hello\n\nworld");
+  });
+
+  it("removes only the given mentions", () => {
+    expect(remove("@ghost hi @alice.test @ghost2", ["ghost", "ghost2"])).toBe("hi @alice.test");
+  });
+
+  it("removes adjacent mentions", () => {
+    expect(remove("@a @b hi", ["a", "b"])).toBe("hi");
+  });
+
+  it("leaves text without the given mentions unchanged", () => {
+    expect(remove("hello @alice.test", [])).toBe("hello @alice.test");
+  });
+
+  it("leaves an empty string when the text is only the mention", () => {
+    expect(remove("@ghost", ["ghost"])).toBe("");
+  });
+});
 
 describe("calcCoverRect", () => {
   describe("landscape image in landscape container (same ratio)", () => {

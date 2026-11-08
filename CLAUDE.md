@@ -24,7 +24,7 @@ x-to-bsky/
 ├── .github/workflows/   # GitHub Actions workflows
 ├── build.sh             # zip packaging
 ├── test/lib.test.js     # Vitest unit tests (lib.js)
-├── test/background.test.js # Vitest: link card fetch destinations, with background.js driven through its message listener and chrome / fetch stubbed
+├── test/background.test.js # Vitest: link card fetch destinations and the removal of mentions that do not exist, with background.js driven through its message listener and chrome / fetch stubbed
 ├── test/icons.test.js   # Vitest: the UI files contain no emoji, and the icon names they use exist in shared.js
 ├── test/hints.test.js   # Vitest: every element of class `hint` in popup.html / options.html gets the same font size and color declared in the page itself (its `<style>` rules or a style attribute), read from the markup without a browser; the thumbnail hint keeps 3:1 on the page background at the opacity options.js gives its row while link cards are off
 ├── test/i18n.test.js    # Vitest: popup.html / options.html / content.js use only messages that exist in Japanese and English, the pages show Japanese only as the fallback of translated elements, and every error code thrown in background.js has a message
@@ -76,7 +76,9 @@ sequenceDiagram
 
 - `createSession()`: authentication + session cache. A clear error message on 401
 - Errors are thrown as `CodedError` with a `code` and the API's reason as `detail`, and a failed response carries both. The extension pages turn them into Japanese or English text with `ERROR_MESSAGES` in shared.js
+- `lookupHandle(handle)`: asks `resolveHandle`; the DID, null when the service answers HTTP 400 (the handle does not resolve), and undefined when it could not be asked or failed
 - `resolveMentionFacets()`: resolves mention handles → DIDs
+- `removeUnresolvableMentions(text)`: removes the mentions `lookupHandle` reports as null; a mention whose lookup gave undefined is kept. `postThread` runs it on each post before URL shortening when `removeInvalidMentions` is ON; a post left with no text and no images is dropped, and a thread with no post left fails with `nothingToPost`
 - `uploadImage(base64Data, mimeType, accessJwt)`: uploads an image with `com.atproto.repo.uploadBlob`
 - `fetchOgpMetadata(url)`: fetches OGP metadata from any URL (stream-reads only the head)
 - `uploadThumbnail(imageUrl, accessJwt)`: downloads an image URL and uploads it to Bluesky. Images over 1MB are shrunk with `downscaleToJpeg` before sending (because the Bluesky lexicon limits `embed.external.thumb` to 1,000,000 bytes)
@@ -94,6 +96,7 @@ sequenceDiagram
 - `shortenUrlsInText(text)`: converts the URLs in text over 300 graphemes to a shortened display. Removes `http(s)://` and replaces whatever exceeds `URL_DISPLAY_LIMIT` graphemes with `...`. Returns `{ text, urlEntries }`
 - `buildShortenedUrlFacets(text, urlEntries)`: generates the facets for shortened URLs. `uri` keeps the original URL
 - `parseFacets(text)`: no lookbehind. Detects boundaries with `(^|\s)` and corrects the offsets
+- `findMentions(text)` / `removeMentions(text, mentions)`: the `@handle` ranges in text (same pattern as `parseFacets`), and the text without the given ranges and the spaces that separated them from the text around
 - `extractFirstUrl(text)`: finds the first URL in the text (removing trailing punctuation)
 - `calcCoverRect(nw, nh, dw, dh, objectPosition)`: computes the visible-area crop for `object-fit: cover` (pure function; the same algorithm as `getVisibleRect` in content.js)
 - `isPublicHttpUrl(url)`: whether a URL is http(s) with a host, as written in the URL, outside the user's machine and local network. Rejects `localhost` / `*.localhost` / `*.local`, single-label names, and IP literals in the unspecified, private, shared (CGNAT), loopback, link-local, site-local and unique-local ranges, including IPv4-mapped IPv6
@@ -101,7 +104,7 @@ sequenceDiagram
 
 ### Credential storage
 
-- `bskyHandle`, `bskyAppPassword`, `crosspostEnabled`, `customSelectors`, `includeQuoteUrl`, `postReplies`, `includeLinkCard` and `linkCardThumbnail` are saved in `chrome.storage.local`
+- `bskyHandle`, `bskyAppPassword`, `crosspostEnabled`, `customSelectors`, `includeQuoteUrl`, `postReplies`, `removeInvalidMentions`, `includeLinkCard` and `linkCardThumbnail` are saved in `chrome.storage.local`
 - Uses an App Password (not the main password; OAuth is not used)
 - `host_permissions`: `bsky.social`, `*.bsky.network`
 - `optional_host_permissions`: `<all_urls>` — web access permission is granted all at once when the link card feature is enabled on the options page, and removed automatically when it is disabled. background.js checks the permission with `hasHostPermission()` at posting time and posts without a card for domains that are not permitted. `hasHostPermission()` returns false for Chrome Web Store URLs (`isWebStoreUrl`)
@@ -154,6 +157,7 @@ Manual testing in the browser:
 12. Test post with the URL of a page that has neither `og:title` nor an HTML `<title>` → check that a link card without a title is generated (for a page with only `<title>`, that title is used)
 13. Disable link cards in the settings → check that no card is generated
 14. Disable thumbnails in the settings → check that the card has only a title
+15. Turn on "Remove mentions that do not exist" and post `hello @no-such-handle.invalid` → check that Bluesky shows `hello`; a mention of an existing handle stays a link
 
 ## Build
 

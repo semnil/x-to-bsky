@@ -154,6 +154,9 @@ function cleanUrlMatch(raw) {
 
 // ─── Facet Parsing (no lookbehind) ──────────────────────
 
+// (start-of-string | whitespace) followed by @handle; group 1 is the boundary, 2 the mention, 3 the handle
+const MENTION_RE_GLOBAL = /(^|\s)(@([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*))/gm;
+
 /**
  * Parse rich text facets (links, mentions, hashtags).
  * Uses boundary-aware matching without lookbehind assertions.
@@ -177,8 +180,8 @@ function parseFacets(text) {
 
   // Mention detection: (start-of-string | whitespace) followed by @handle
   // The did field temporarily holds the handle; resolveMentionFacets replaces it with the actual DID
-  const mentionRegex = /(^|\s)(@([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*))/gm;
-  while ((match = mentionRegex.exec(text)) !== null) {
+  MENTION_RE_GLOBAL.lastIndex = 0;
+  while ((match = MENTION_RE_GLOBAL.exec(text)) !== null) {
     const mentionStart = match.index + match[1].length;
     const mention = match[2]; // @handle
     facets.push({
@@ -199,6 +202,45 @@ function parseFacets(text) {
   }
 
   return facets;
+}
+
+/**
+ * Find the mentions in text, in order of appearance.
+ * @param {string} text
+ * @returns {Array<{ handle: string, start: number, end: number }>} `start` / `end` are string indices of "@handle"
+ */
+function findMentions(text) {
+  const mentions = [];
+  MENTION_RE_GLOBAL.lastIndex = 0;
+  let match;
+  while ((match = MENTION_RE_GLOBAL.exec(text)) !== null) {
+    const start = match.index + match[1].length;
+    mentions.push({ handle: match[3], start, end: start + match[2].length });
+  }
+  return mentions;
+}
+
+/**
+ * Remove mentions from text together with the spaces that separated them from the text around:
+ * the spaces after a mention that starts a line or follows a space, and the spaces before one that ends a line.
+ * @param {string} text
+ * @param {Array<{ start: number, end: number }>} mentions - ranges from findMentions
+ * @returns {string}
+ */
+function removeMentions(text, mentions) {
+  let out = text;
+  for (const { start, end } of [...mentions].sort((a, b) => b.start - a.start)) {
+    let from = start;
+    let to = end;
+    if (from === 0 || /\s/.test(out[from - 1])) {
+      while (to < out.length && /[ \t\u3000]/.test(out[to])) to++;
+    }
+    if (to === out.length || out[to] === "\n" || out[to] === "\r") {
+      while (from > 0 && /[ \t\u3000]/.test(out[from - 1])) from--;
+    }
+    out = out.slice(0, from) + out.slice(to);
+  }
+  return out;
 }
 
 // ─── URL Shortening ──────────────────────────────────
@@ -406,6 +448,8 @@ export {
   buildShortenedUrlFacets,
   buildByteOffsetMap,
   parseFacets,
+  findMentions,
+  removeMentions,
   extractFirstUrl,
   calcCoverRect,
   isPublicHttpUrl,
