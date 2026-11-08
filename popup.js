@@ -28,10 +28,18 @@ const handleEl = document.getElementById("handle");
 const notConfigured = document.getElementById("not-configured");
 const settingsLink = document.getElementById("settings-link");
 const saveError = document.getElementById("save-error");
+// How many crosspostEnabled changes have arrived: a read shows the setting only where none arrived while it was out
+let crosspostChanges = 0;
+
+/** Show the stored crosspostEnabled read with `data`, where no change arrived since the read started at `changes`. */
+function showCrosspost(data, changes) {
+  if (changes === crosspostChanges) toggle.checked = data.crosspostEnabled !== false;
+}
 
 // Load state directly from storage (avoids service worker wake-up issues)
+const loadChanges = crosspostChanges;
 readSettings(["bskyHandle", "crosspostEnabled"]).then((data) => {
-  toggle.checked = data.crosspostEnabled !== false;
+  showCrosspost(data, loadChanges);
 
   if (data.bskyHandle) {
     statusEl.style.display = "block";
@@ -51,7 +59,8 @@ toggle.addEventListener("change", () => {
     async (err) => {
       saveError.textContent = translate(i18n, "saveFailed") + err.message;
       saveError.style.display = "block";
-      toggle.checked = (await readSettings(["crosspostEnabled"])).crosspostEnabled !== false;
+      const changes = crosspostChanges;
+      showCrosspost(await readSettings(["crosspostEnabled"]), changes);
     }
   );
 });
@@ -60,7 +69,9 @@ toggle.addEventListener("change", () => {
 // Chrome sync.
 chrome.storage.onChanged.addListener((changes, areaName) => {
   const change = settingChanges(changes, areaName).crosspostEnabled;
-  if (change) toggle.checked = change.newValue !== false;
+  if (!change) return;
+  crosspostChanges++;
+  toggle.checked = change.newValue !== false;
 });
 
 // Settings link

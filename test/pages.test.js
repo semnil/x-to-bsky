@@ -226,6 +226,57 @@ describe("popup.html", () => {
     expect(await until(() => byId("toggle").checked === false)).toBe(true);
   });
 
+  it("keeps a crosspost change that arrives while its first read is out", async () => {
+    const storage = createStorage();
+    storage.areas.local.bskyHandle = "bob.test";
+    storage.areas.sync.crosspostEnabled = false;
+    // The first read of crosspostEnabled takes the stored value at once and answers after the change.
+    const get = storage.sync.get;
+    let release;
+    const late = new Promise((resolve) => { release = resolve; });
+    storage.sync.get = (keys, callback) => {
+      storage.sync.get = get;
+      const answer = get(keys, callback);
+      return late.then(() => answer);
+    };
+    const byId = open("popup.html", storage);
+    await storage.sync.set({ crosspostEnabled: true });
+    expect(byId("toggle").checked).toBe(true);
+    release();
+    expect(await until(() => byId("handle").textContent === "@bob.test")).toBe(true);
+    expect(byId("toggle").checked).toBe(true);
+  });
+
+  it("keeps a crosspost change that arrives while the read after a refused write is out", async () => {
+    const storage = createStorage();
+    storage.areas.local.bskyHandle = "bob.test";
+    storage.areas.sync.crosspostEnabled = true;
+    const byId = open("popup.html", storage);
+    expect(await until(() => byId("handle").textContent === "@bob.test")).toBe(true);
+    // The read after the refused write takes the stored value at once and answers after the change.
+    const get = storage.sync.get;
+    let release;
+    let asked;
+    const late = new Promise((resolve) => { release = resolve; });
+    const reading = new Promise((resolve) => { asked = resolve; });
+    storage.sync.get = (keys, callback) => {
+      storage.sync.get = get;
+      asked();
+      const answer = get(keys, callback);
+      return late.then(() => answer);
+    };
+    storage.sync.refuse = RATE_MESSAGE;
+    byId("toggle").checked = false;
+    byId("toggle").dispatch("change");
+    await reading;
+    storage.sync.refuse = null;
+    await storage.sync.set({ crosspostEnabled: false });
+    release();
+    expect(await until(() => byId("save-error").textContent !== "")).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(byId("toggle").checked).toBe(false);
+  });
+
   it("stores the crosspost toggle in sync", async () => {
     const storage = createStorage();
     storage.areas.local.bskyHandle = "bob.test";
