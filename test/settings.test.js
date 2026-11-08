@@ -118,6 +118,20 @@ describe("moveSettingsToSync", () => {
     expect(storage.areas.local).toEqual({});
   });
 
+  it("keeps the renamed link card settings readable while sync refuses part of the move", async () => {
+    const storage = createStorage();
+    Object.assign(storage.areas.local, { includeYouTubeCard: true, youtubeCardThumbnail: false });
+    const set = storage.sync.set;
+    storage.sync.set = (items, callback) =>
+      "linkCardThumbnail" in items ? Promise.reject(new Error("This request exceeds the MAX_WRITE_OPERATIONS_PER_MINUTE quota.")) : set(items, callback);
+    await expect(moveSettingsToSync(storage)).rejects.toThrow("MAX_WRITE_OPERATIONS_PER_MINUTE");
+    expect(await readSettings(["includeLinkCard", "linkCardThumbnail"], storage)).toEqual({ includeLinkCard: true, linkCardThumbnail: false });
+    storage.sync.set = set;
+    await moveSettingsToSync(storage);
+    expect(storage.areas.sync).toEqual({ includeLinkCard: true, linkCardThumbnail: false });
+    expect(storage.areas.local).toEqual({});
+  });
+
   it("leaves includeYouTubeCard alone where local holds includeLinkCard", async () => {
     const storage = createStorage();
     Object.assign(storage.areas.local, { includeLinkCard: false, includeYouTubeCard: true });

@@ -121,17 +121,18 @@
    * SETTINGS_LOCK. A key sync already holds keeps sync's value, and local's copy is dropped. Each key is
    * written to sync on its own before it is removed from local, so a reader finds it in one of the two,
    * and a key sync refuses stays in local, where readSettings still reads it. includeYouTubeCard and
-   * youtubeCardThumbnail, where local holds no includeLinkCard, are moved as includeLinkCard and
-   * linkCardThumbnail, and removed once both are in sync. Rejects, once every key has been tried, when
-   * sync refused any.
+   * youtubeCardThumbnail, where local holds no includeLinkCard, are first renamed in local to
+   * includeLinkCard and linkCardThumbnail, and then moved as those. Rejects, once every key has been
+   * tried, when sync refused any.
    */
   function moveSettingsToSync(storage = chrome.storage, locks = navigator.locks) {
     return locks.request(SETTINGS_LOCK, async () => {
       const local = await storage.local.get([...SYNCED_SETTING_KEYS, ...LEGACY_LINK_CARD_KEYS]);
-      const renamed = local.includeLinkCard === undefined && local.includeYouTubeCard !== undefined;
-      if (renamed) {
-        local.includeLinkCard = !!local.includeYouTubeCard;
-        local.linkCardThumbnail = local.youtubeCardThumbnail !== false;
+      if (local.includeLinkCard === undefined && local.includeYouTubeCard !== undefined) {
+        const renamed = { includeLinkCard: !!local.includeYouTubeCard, linkCardThumbnail: local.youtubeCardThumbnail !== false };
+        await storage.local.set(renamed);
+        await storage.local.remove(LEGACY_LINK_CARD_KEYS);
+        Object.assign(local, renamed);
       }
       const keys = SYNCED_SETTING_KEYS.filter((key) => local[key] !== undefined);
       if (!keys.length) return;
@@ -148,9 +149,6 @@
           }
         }
         moved.push(key);
-      }
-      if (renamed && moved.includes("includeLinkCard") && moved.includes("linkCardThumbnail")) {
-        moved.push(...LEGACY_LINK_CARD_KEYS);
       }
       if (moved.length) await storage.local.remove(moved);
       if (refused.length) throw new Error(`sync refused ${refused.join("; ")}`);
