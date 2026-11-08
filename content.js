@@ -77,12 +77,12 @@
   // Keep state in sync when the settings change from any context (popup, options, or another Chrome
   // through Chrome sync). Each setting's change counts in the area it is kept in (settingChanges). A synced
   // setting's change in chrome.storage.local is to the copy an earlier version kept there: the setting is
-  // read again, which gives sync's value where sync holds one.
+  // read again, which gives sync's value where sync holds one. Both count as a change for a read already out.
   chrome.storage.onChanged.addListener((areaChanges, areaName) => {
     const changes = Object.entries(settingChanges(areaChanges, areaName)).filter(([key]) => SETTING_KEYS.includes(key));
-    for (const [key] of changes) changeCounts[key] = (changeCounts[key] || 0) + 1;
-    takeSettings(Object.fromEntries(changes.map(([key, change]) => [key, change.newValue])));
     const copies = localCopyChanges(areaChanges, areaName).filter((key) => SETTING_KEYS.includes(key));
+    for (const key of [...changes.map(([key]) => key), ...copies]) changeCounts[key] = (changeCounts[key] || 0) + 1;
+    takeSettings(Object.fromEntries(changes.map(([key, change]) => [key, change.newValue])));
     if (copies.length) readAndTake(copies);
   });
 

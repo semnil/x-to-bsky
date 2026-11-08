@@ -23,22 +23,27 @@ const chromePath = [process.env.CHROME_PATH, ...(CHROME_PATHS[process.platform] 
 /**
  * The extension APIs the page runs with: chrome.storage over `areas` ({ local, sync }) with onChanged.
  * window.__fireStorageChange(changes, areaName) applies a change to its area and hands it to the
- * listeners. With `holdLocal`, chrome.storage.local answers nothing until window.__releaseLocal(), each
- * read answering what the area held when it was made.
+ * listeners. With `holdLocal` naming a key, the first chrome.storage.local read that asks for it answers
+ * what the area held when it was made, once window.__releaseLocal() is called; window.__localHeld turns
+ * true when that read is made.
  */
-const stub = (areas, holdLocal = false) => `window.chrome = {
+const stub = (areas, holdLocal = "") => `window.chrome = {
   runtime: { id: "test", lastError: undefined, sendMessage(msg, cb) { setTimeout(() => cb({}), 0); } },
   storage: (() => {
     const areas = ${JSON.stringify(areas)};
     const listeners = [];
     let release;
-    const gate = ${holdLocal} ? new Promise((resolve) => { release = resolve; }) : null;
-    window.__releaseLocal = () => release?.();
+    let hold = ${JSON.stringify(holdLocal)};
+    const gate = new Promise((resolve) => { release = resolve; });
+    window.__localHeld = false;
+    window.__releaseLocal = () => release();
     const area = (name) => ({
       get(keys, cb) {
         const out = {};
         for (const key of [].concat(keys)) if (key in areas[name]) out[key] = JSON.parse(JSON.stringify(areas[name][key]));
-        const answer = name === "local" && gate ? gate.then(() => out) : Promise.resolve(out);
+        const held = name === "local" && hold && [].concat(keys).includes(hold);
+        if (held) { hold = ""; window.__localHeld = true; }
+        const answer = held ? gate.then(() => out) : Promise.resolve(out);
         if (cb) return void answer.then(cb);
         return answer;
       },
@@ -223,7 +228,7 @@ describe.skipIf(!chromePath)(chromePath ? "content.js reading the settings (head
   }
 
   /** Open a fresh stand-in page over `areas`, and wait until content.js has asked for its settings. */
-  async function load(areas, { holdLocal = false, extra = "" } = {}) {
+  async function load(areas, { holdLocal = "", extra = "" } = {}) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "xtobsky-page-"));
     dirs.push(dir);
     await chrome.send("Page.navigate", { url: page(dir, stub(areas, holdLocal), extra) }, sessionId);
@@ -248,12 +253,12 @@ describe.skipIf(!chromePath)(chromePath ? "content.js reading the settings (head
   }, 30000);
 
   it("takes what its first read gives", async () => {
-    await load({ local: { bskyHandle: "alice.bsky.social" }, sync: { crosspostEnabled: true } }, { holdLocal: true });
+    await load({ local: { bskyHandle: "alice.bsky.social" }, sync: { crosspostEnabled: true } }, { holdLocal: "bskyHandle" });
     expect(await evaluate(`(async () => { __releaseLocal(); await __settle(); return ${HAS_BADGE}; })()`)).toBe(true);
   }, 30000);
 
   it("keeps a change that arrives while its first read is out", async () => {
-    await load({ local: { bskyHandle: "alice.bsky.social" }, sync: { crosspostEnabled: true } }, { holdLocal: true });
+    await load({ local: { bskyHandle: "alice.bsky.social" }, sync: { crosspostEnabled: true } }, { holdLocal: "bskyHandle" });
     expect(await evaluate(`(async () => {
       __fireStorageChange({ crosspostEnabled: { oldValue: true, newValue: false } }, "sync");
       __releaseLocal();
@@ -273,5 +278,24 @@ describe.skipIf(!chromePath)(chromePath ? "content.js reading the settings (head
       await __settle();
       return ${BADGES};
     })()`)).toEqual([false, true]);
+  }, 30000);
+
+  it("does not bring back a copy in local removed while its first read is out", async () => {
+    // The first read has read the copy from local, and answers after the copy is removed and read again.
+    // Until it answers there is no handle, so no badge.
+    await load(
+      { local: { bskyHandle: "alice.bsky.social", customSelectors: { postButton: "#custom-post" } }, sync: {} },
+      { holdLocal: "customSelectors", extra: `<button id="custom-post" type="button">Custom</button>` },
+    );
+    expect(await evaluate(`(async () => {
+      while (!__localHeld) await new Promise((resolve) => setTimeout(resolve, 0));
+      __fireStorageChange({ customSelectors: { oldValue: { postButton: "#custom-post" } } }, "local");
+      await __reads.at(-1);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const afterReset = ${BADGES};
+      __releaseLocal();
+      await __settle();
+      return [afterReset, ${BADGES}];
+    })()`)).toEqual([[false, false], [false, true]]);
   }, 30000);
 });
