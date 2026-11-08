@@ -2,7 +2,7 @@
 
 [日本語版はこちら (Japanese)](PRIVACY_POLICY_JA.md)
 
-Last updated: 2026-04-05
+Last updated: 2026-11-08
 
 ## Overview
 
@@ -14,7 +14,13 @@ X to Bluesky Crossposter is a Chrome extension that cross-posts your X (Twitter)
 
 - **What**: Your Bluesky handle and App Password.
 - **Purpose**: Used solely to authenticate with the Bluesky API (bsky.social) on your behalf.
-- **Storage**: Saved locally in `chrome.storage.local` on your device. Never transmitted to any server other than bsky.social.
+- **Storage**: Saved locally in `chrome.storage.local` on your device. Never transmitted to any server other than bsky.social, and not synced to your other devices.
+
+### Settings
+
+- **What**: The extension's options (crossposting on or off, the post options, the link card options and any custom DOM selectors).
+- **Purpose**: To keep the same settings in every Chrome you use.
+- **Storage**: Saved in `chrome.storage.sync`. When Chrome sync is on, Chrome sends them to Google's sync service and shares them with the other Chromes signed in to the same Google account; when it is off, they stay on your device. Your handle and App Password are not among them.
 
 ### User Activity
 
@@ -43,20 +49,20 @@ X to Bluesky Crossposter is a Chrome extension that cross-posts your X (Twitter)
 | `bsky.social` / `*.bsky.network` | Handle, App Password, post text, images | Authentication and post creation |
 | URLs in your posts (optional) | HTTP GET request (no credentials) | Fetch OGP metadata for link cards |
 
-No other external servers are contacted.
+No other external servers are contacted by the extension. When Chrome sync is on, Chrome itself sends the settings in `chrome.storage.sync` (the options, not your handle or App Password) to Google's sync service.
 
 ## Data Storage and Security
 
-- All credentials and settings are stored in `chrome.storage.local`, which is accessible only to this extension.
-- No data is synced across devices or stored in the cloud.
+- Your handle and App Password are stored in `chrome.storage.local`, which is accessible only to this extension and is not synced.
+- The other settings are stored in `chrome.storage.sync`, accessible only to this extension, and synced by Chrome through your Google account when Chrome sync is on.
 - You can revoke your App Password at any time in Bluesky under Settings > Privacy and security > App passwords.
-- Uninstalling the extension removes all locally stored data.
+- Uninstalling the extension removes all data it stored on your device.
 
 ## Permissions
 
-- **storage**: Save your credentials and preferences locally.
+- **storage**: Save your credentials on your device, and your preferences in Chrome's sync storage.
 - **host_permissions** (`bsky.social`, `*.bsky.network`): Communicate with the Bluesky API.
-- **optional_host_permissions** (`<all_urls>`): Requested at runtime only when you enable link cards. Revoked automatically when you disable the feature.
+- **optional_host_permissions** (`<all_urls>`): Requested at runtime only when you enable link cards, in the Chrome where you enable them. Revoked automatically from that Chrome when you disable the feature there.
 
 ## Third-Party Dependencies
 

@@ -249,8 +249,9 @@
 
     <div class="security-note" data-i18n-html="securityNote">
       <strong>セキュリティについて</strong><br>
-      • 認証情報は chrome.storage.local に保存され、この拡張のみがアクセスします。<br>
-      • 認証情報の送信先は bsky.social のみです。リンクカード有効時は対象 URL のメタデータを取得しますが、認証情報やユーザーデータは送信しません。<br>
+      • ハンドルと App Password はこのパソコンの chrome.storage.local に保存され、この拡張のみがアクセスします。<br>
+      • その他の設定は chrome.storage.sync に保存されます。Chrome の同期がオンのとき、Chrome はこれらを Google の同期サービスへ送り、同じアカウントでログインしている他の Chrome と共有します。<br>
+      • この拡張が認証情報を送る先は bsky.social のみです。リンクカード有効時は対象 URL のメタデータを取得しますが、認証情報やユーザーデータは送信しません。<br>
       • アプリパスワードは Bluesky の 設定 → プライバシーとセキュリティ → アプリパスワード からいつでも無効化できます。
     </div>
 
@@ -314,6 +315,8 @@
       </label>
     </div>
 
+    <div id="behaviorMessage" class="message" role="alert"></div>
+
     <!-- ─── Advanced: DOM Selectors ─── -->
     <details class="advanced">
       <summary><span class="summary-icon" data-icon="gear"></span><span data-i18n="advancedTitle">高度な設定 — DOM セレクタ</span></summary>
@@ -354,6 +357,7 @@
   </div>
 
   <script src="shared.js"></script>
+  <script src="settings.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

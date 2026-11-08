@@ -93,10 +93,13 @@
     .settings-link:hover {
       text-decoration: underline;
     }
-    .not-configured {
+    .not-configured, .save-error {
       font-size: 13px;
       color: #f4212e;
       margin-bottom: 8px;
+    }
+    .save-error {
+      margin: 8px 0 0;
     }
   </style>
 </head>
@@ -119,9 +122,12 @@
     </label>
   </div>
 
+  <div id="save-error" class="save-error" role="alert" style="display:none;"></div>
+
   <a id="settings-link" class="settings-link" data-i18n="openSettings">設定を開く</a>
 
   <script src="shared.js"></script>
+  <script src="settings.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

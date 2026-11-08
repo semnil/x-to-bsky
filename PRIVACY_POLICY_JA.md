@@ -2,7 +2,7 @@
 
 [English version here](PRIVACY_POLICY.md)
 
-最終更新日: 2026-04-05
+最終更新日: 2026-11-08
 
 ## 概要
 
@@ -14,7 +14,13 @@ X to Bluesky Crossposter は、X (Twitter) の投稿を Bluesky に同時投稿�
 
 - **対象**: Bluesky ハンドルおよびアプリパスワード
 - **目的**: Bluesky API (bsky.social) での認証にのみ使用
-- **保存先**: デバイス上の `chrome.storage.local` にローカル保存。bsky.social 以外のサーバーには一切送信されません
+- **保存先**: デバイス上の `chrome.storage.local` にローカル保存。bsky.social 以外のサーバーには一切送信されず、他のデバイスへも同期されません
+
+### 設定
+
+- **対象**: 拡張機能の設定 (クロスポストのオン・オフ、投稿オプション、リンクカードのオプション、独自の DOM セレクタ)
+- **目的**: 使用するすべての Chrome で同じ設定を保つため
+- **保存先**: `chrome.storage.sync` に保存。Chrome の同期がオンのとき、Chrome はこれらを Google の同期サービスへ送り、同じ Google アカウントでログインしている他の Chrome と共有します。同期がオフのときはデバイス上にとどまります。ハンドルとアプリパスワードは含まれません
 
 ### ユーザーアクティビティ
 
@@ -43,20 +49,20 @@ X to Bluesky Crossposter は、X (Twitter) の投稿を Bluesky に同時投稿�
 | `bsky.social` / `*.bsky.network` | ハンドル、アプリパスワード、投稿テキスト、画像 | 認証および投稿作成 |
 | 投稿中の URL（オプション） | HTTP GET リクエスト（認証情報なし） | リンクカード用 OGP メタデータの取得 |
 
-上記以外の外部サーバーへの通信は行いません。
+拡張機能は上記以外の外部サーバーへの通信は行いません。Chrome の同期がオンのとき、`chrome.storage.sync` の設定 (各種設定。ハンドルとアプリパスワードは含まない) は Chrome 自身が Google の同期サービスへ送ります。
 
 ## データの保存とセキュリティ
 
-- すべての認証情報と設定は `chrome.storage.local` に保存され、この拡張機能のみがアクセス可能です
-- デバイス間での同期やクラウドへの保存は行いません
+- ハンドルとアプリパスワードは `chrome.storage.local` に保存され、この拡張機能のみがアクセス可能で、同期されません
+- その他の設定は `chrome.storage.sync` に保存され、この拡張機能のみがアクセス可能です。Chrome の同期がオンのとき、Chrome が Google アカウントを通じて同期します
 - アプリパスワードは Bluesky の 設定 → プライバシーとセキュリティ → アプリパスワード からいつでも無効化できます
-- 拡張機能をアンインストールすると、ローカルに保存されたすべてのデータが削除されます
+- 拡張機能をアンインストールすると、拡張機能がデバイスに保存したすべてのデータが削除されます
 
 ## 権限
 
-- **storage**: 認証情報と設定をローカルに保存
+- **storage**: 認証情報をデバイスに、設定を Chrome の同期ストレージに保存
 - **host_permissions** (`bsky.social`, `*.bsky.network`): Bluesky API との通信
-- **optional_host_permissions** (`<all_urls>`): リンクカード有効化時にのみ実行時に要求。機能を無効化すると自動的に解除されます
+- **optional_host_permissions** (`<all_urls>`): リンクカードを有効化した Chrome で、有効化時にのみ実行時に要求。その Chrome で機能を無効化すると、その Chrome から自動的に解除されます
 
 ## 第三者依存
 

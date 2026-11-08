@@ -18,6 +18,7 @@ FILES=(
   background.js
   lib.js
   shared.js
+  settings.js
   content.js
   content.css
   popup.html

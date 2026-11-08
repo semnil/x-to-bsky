@@ -17,7 +17,7 @@
   "content_scripts": [
     {
       "matches": ["https://x.com/*", "https://twitter.com/*"],
-      "js": ["shared.js", "content.js"],
+      "js": ["shared.js", "settings.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }
