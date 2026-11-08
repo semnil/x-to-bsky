@@ -238,6 +238,15 @@ describe("removing mentions that do not exist", () => {
     expect(handleLookups).toContain("foo_bar");
   });
 
+  it("keeps the text after an existing mention and two or more dots", async () => {
+    store.removeInvalidMentions = true;
+    handles["real.test"] = "did:example:real";
+    const record = await post("Hi @real.test...thanks!");
+    expect(record.text).toBe("Hi @real.test...thanks!");
+    expect(handleLookups).not.toContain("real.test...thanks");
+    expect(mentionDids(record)).toEqual(["did:example:real"]);
+  });
+
   it("keeps the images of a post whose text is left empty", async () => {
     store.removeInvalidMentions = true;
     const image = { base64: "data:image/png;base64,SU1BR0U=", mimeType: "image/png", width: 2, height: 1 };

@@ -202,8 +202,9 @@ function parseFacets(text) {
 }
 
 // (start-of-string | whitespace) followed by @ and a run of letters, digits, "_", "." and "-" that starts and
-// ends with a letter, digit or "_": a Bluesky handle or an X username, without a trailing "." or "-"
-const MENTION_TOKEN_RE_GLOBAL = /(^|\s)(@([A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?))/gm;
+// ends with a letter, digit or "_" and has no ".." in it: a Bluesky handle or an X username, without a trailing
+// "." or "-" and without what follows two or more dots in a row
+const MENTION_TOKEN_RE_GLOBAL = /(^|\s)(@([A-Za-z0-9_](?:(?:[A-Za-z0-9_-]|\.(?!\.))*[A-Za-z0-9_])?))/gm;
 
 /**
  * Find the mentions in text, in order of appearance. A mention is the whole "@name" token,

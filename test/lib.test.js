@@ -540,6 +540,11 @@ describe("findMentions", () => {
     expect(findMentions("see @alice.test_x now").map((m) => m.handle)).toEqual(["alice.test_x"]);
   });
 
+  it("ends the mention before two or more dots in a row", () => {
+    const text = "Hi @real.test...thanks! @a--b.test";
+    expect(findMentions(text).map((m) => text.slice(m.start, m.end))).toEqual(["@real.test", "@a--b.test"]);
+  });
+
   it("leaves a trailing dot or hyphen out of the mention", () => {
     const text = "thanks @alice.test. and @bob-";
     expect(findMentions(text).map((m) => text.slice(m.start, m.end))).toEqual(["@alice.test", "@bob"]);
