@@ -200,6 +200,14 @@ describe("settingChanges", () => {
   });
 });
 
+describe("localCopyChanges", () => {
+  it("names the synced settings an event in local changes", () => {
+    const changes = { postReplies: { oldValue: true }, bskyHandle: { newValue: "alice.test" }, includeYouTubeCard: { oldValue: true } };
+    expect(localCopyChanges(changes, "local")).toEqual(["postReplies"]);
+    expect(localCopyChanges(changes, "sync")).toEqual([]);
+  });
+});
+
 describe("linkCardsOn", () => {
   const permissions = (granted) => ({
     contains: async ({ origins }) => granted && origins.length === 1 && origins[0] === "<all_urls>",

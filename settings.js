@@ -98,6 +98,15 @@
     return entriesWhere(changes, (key) => keys.includes(key));
   }
 
+  /**
+   * The synced keys a chrome.storage.onChanged event in "local" changes: the copies an earlier version
+   * kept there, which readSettings reads while sync does not hold the key. What such a key now reads as is
+   * what readSettings gives for it.
+   */
+  function localCopyChanges(changes, areaName) {
+    return areaName === "local" ? Object.keys(changes).filter((key) => SYNCED_SETTING_KEYS.includes(key)) : [];
+  }
+
   /** Remove `keys` from both chrome.storage.sync and chrome.storage.local, under SETTINGS_LOCK. */
   function removeSettings(keys, storage = chrome.storage, locks = navigator.locks) {
     return locks.request(SETTINGS_LOCK, async () => {
@@ -163,6 +172,7 @@
     writeSettings,
     removeSettings,
     settingChanges,
+    localCopyChanges,
     moveSettingsToSync,
     linkCardsOn,
   });

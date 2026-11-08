@@ -1,7 +1,7 @@
 // content.js — Runs on x.com / twitter.com
 // Observes the post button click and sends text + images to background for Bluesky cross-posting.
-// DEFAULT_SELECTORS, translate and errorText are provided by shared.js, and readSettings and
-// settingChanges by settings.js (both loaded before this file).
+// DEFAULT_SELECTORS, translate and errorText are provided by shared.js, and readSettings,
+// settingChanges and localCopyChanges by settings.js (both loaded before this file).
 
 (() => {
   "use strict";
@@ -40,46 +40,50 @@
     },
   };
 
-  // Load all settings from storage
-  readSettings(["customSelectors", "includeQuoteUrl", "postReplies", "bskyHandle", "crosspostEnabled"]).then(
-    (data) => {
-      if (data.customSelectors) {
-        selectors = { ...DEFAULT_SELECTORS, ...data.customSelectors };
-      }
-      includeQuoteUrl = !!data.includeQuoteUrl;
-      postReplies = !!data.postReplies;
-      configured = !!data.bskyHandle;
-      enabled = data.crosspostEnabled !== false;
-      syncBadges();
-    }
-  );
+  const SETTING_KEYS = ["customSelectors", "includeQuoteUrl", "postReplies", "bskyHandle", "crosspostEnabled"];
+  // How many changes each setting has had: a read takes a setting only where none arrived while it was out
+  const changeCounts = {};
 
-  // Keep state in sync when the settings change from any context (popup, options, or another Chrome
-  // through Chrome sync). Each setting's change counts in the area it is kept in (settingChanges): the
-  // move to sync removing the copy an earlier version kept in chrome.storage.local is no change.
-  chrome.storage.onChanged.addListener((areaChanges, areaName) => {
-    const changes = settingChanges(areaChanges, areaName);
-    if (changes.crosspostEnabled) {
-      enabled = changes.crosspostEnabled.newValue !== false;
-    }
-    if (changes.bskyHandle) {
-      configured = !!changes.bskyHandle.newValue;
-    }
-    if (changes.includeQuoteUrl) {
-      includeQuoteUrl = !!changes.includeQuoteUrl.newValue;
-    }
-    if (changes.postReplies) {
-      postReplies = !!changes.postReplies.newValue;
-    }
-    if (changes.customSelectors) {
-      selectors = changes.customSelectors.newValue
-        ? { ...DEFAULT_SELECTORS, ...changes.customSelectors.newValue }
-        : { ...DEFAULT_SELECTORS };
+  /**
+   * Take `values` (setting key → stored value, undefined where it is not stored) as the settings, and add
+   * or remove the badges where they depend on them.
+   */
+  function takeSettings(values) {
+    if ("crosspostEnabled" in values) enabled = values.crosspostEnabled !== false;
+    if ("bskyHandle" in values) configured = !!values.bskyHandle;
+    if ("includeQuoteUrl" in values) includeQuoteUrl = !!values.includeQuoteUrl;
+    if ("postReplies" in values) postReplies = !!values.postReplies;
+    if ("customSelectors" in values) {
+      selectors = values.customSelectors ? { ...DEFAULT_SELECTORS, ...values.customSelectors } : { ...DEFAULT_SELECTORS };
       removeBadges();
     }
-    if (changes.crosspostEnabled || changes.bskyHandle || changes.customSelectors) {
+    if ("crosspostEnabled" in values || "bskyHandle" in values || "customSelectors" in values) {
       syncBadges();
     }
+  }
+
+  /** Read `keys` and take them, except the ones a change arrived for while the read was out. */
+  function readAndTake(keys) {
+    const counts = keys.map((key) => changeCounts[key] || 0);
+    return readSettings(keys).then((data) => {
+      const unchanged = keys.filter((key, i) => (changeCounts[key] || 0) === counts[i]);
+      takeSettings(Object.fromEntries(unchanged.map((key) => [key, data[key]])));
+    });
+  }
+
+  // Load all settings from storage
+  readAndTake(SETTING_KEYS);
+
+  // Keep state in sync when the settings change from any context (popup, options, or another Chrome
+  // through Chrome sync). Each setting's change counts in the area it is kept in (settingChanges). A synced
+  // setting's change in chrome.storage.local is to the copy an earlier version kept there: the setting is
+  // read again, which gives sync's value where sync holds one.
+  chrome.storage.onChanged.addListener((areaChanges, areaName) => {
+    const changes = Object.entries(settingChanges(areaChanges, areaName)).filter(([key]) => SETTING_KEYS.includes(key));
+    for (const [key] of changes) changeCounts[key] = (changeCounts[key] || 0) + 1;
+    takeSettings(Object.fromEntries(changes.map(([key, change]) => [key, change.newValue])));
+    const copies = localCopyChanges(areaChanges, areaName).filter((key) => SETTING_KEYS.includes(key));
+    if (copies.length) readAndTake(copies);
   });
 
   // ─── Toast ───────────────────────────────────────────────

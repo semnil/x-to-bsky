@@ -6,8 +6,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 // content.js and content.css run in headless Chrome, driven over the DevTools protocol, on a stand-in
-// for X's compose toolbar with the extension APIs stubbed (the handle in chrome.storage.local, crossposting
-// on). window.__fireStorageChange(changes, areaName) hands content.js a chrome.storage.onChanged event.
+// for X's compose toolbar with the extension APIs stubbed (see stub()).
 // Chrome is taken from CHROME_PATH or the platform's usual install path; without one, the cases are
 // skipped under a name that says so.
 
@@ -21,36 +20,70 @@ const CHROME_PATHS = {
 };
 const chromePath = [process.env.CHROME_PATH, ...(CHROME_PATHS[process.platform] || [])].find((p) => p && fs.existsSync(p));
 
-const STUB = `window.chrome = {
+/**
+ * The extension APIs the page runs with: chrome.storage over `areas` ({ local, sync }) with onChanged.
+ * window.__fireStorageChange(changes, areaName) applies a change to its area and hands it to the
+ * listeners. With `holdLocal`, chrome.storage.local answers nothing until window.__releaseLocal(), each
+ * read answering what the area held when it was made.
+ */
+const stub = (areas, holdLocal = false) => `window.chrome = {
   runtime: { id: "test", lastError: undefined, sendMessage(msg, cb) { setTimeout(() => cb({}), 0); } },
   storage: (() => {
-    const areas = { local: { bskyHandle: "alice.bsky.social" }, sync: {} };
+    const areas = ${JSON.stringify(areas)};
     const listeners = [];
+    let release;
+    const gate = ${holdLocal} ? new Promise((resolve) => { release = resolve; }) : null;
+    window.__releaseLocal = () => release?.();
     const area = (name) => ({
       get(keys, cb) {
         const out = {};
-        for (const key of [].concat(keys)) if (key in areas[name]) out[key] = areas[name][key];
-        if (cb) return void cb(out);
-        return Promise.resolve(out);
+        for (const key of [].concat(keys)) if (key in areas[name]) out[key] = JSON.parse(JSON.stringify(areas[name][key]));
+        const answer = name === "local" && gate ? gate.then(() => out) : Promise.resolve(out);
+        if (cb) return void answer.then(cb);
+        return answer;
       },
     });
-    window.__fireStorageChange = (changes, areaName) => listeners.forEach((listener) => listener(changes, areaName));
+    window.__fireStorageChange = (changes, areaName) => {
+      for (const [key, change] of Object.entries(changes)) {
+        if ("newValue" in change) areas[areaName][key] = change.newValue;
+        else delete areas[areaName][key];
+      }
+      listeners.forEach((listener) => listener(changes, areaName));
+    };
     return { local: area("local"), sync: area("sync"), onChanged: { addListener: (listener) => listeners.push(listener) } };
   })(),
 };`;
 
-const page = (dir) => {
+// Records every readSettings call content.js makes; window.__settle() waits for all of them, and for the
+// ones made while it waits.
+const READS = `<script>(() => {
+  const read = window.readSettings;
+  window.__reads = [];
+  window.readSettings = (keys) => { const answer = read(keys); window.__reads.push(answer); return answer; };
+  window.__settle = async () => {
+    for (let seen = -1; seen !== window.__reads.length;) {
+      seen = window.__reads.length;
+      await Promise.all(window.__reads);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  };
+})();</script>`;
+
+/** Write the stand-in page into `dir`, with `stubSource` for the extension APIs and `extra` in its body; returns its URL. */
+const page = (dir, stubSource, extra = "") => {
   const url = (file) => pathToFileURL(path.resolve(file)).href;
-  fs.writeFileSync(path.join(dir, "stub.js"), STUB);
+  fs.writeFileSync(path.join(dir, "stub.js"), stubSource);
   fs.writeFileSync(path.join(dir, "page.html"), `<!doctype html><html><head><meta charset="utf-8">
 <link rel="stylesheet" href="${url("content.css")}"></head>
 <body style="background: #ffffff; padding: 40px">
 <div data-testid="tweetTextarea_0"></div>
-<button data-testid="tweetButtonInline" type="button">Post</button>
-<script src="stub.js"></script><script src="${url("shared.js")}"></script><script src="${url("settings.js")}"></script><script src="${url("content.js")}"></script>
+<button data-testid="tweetButtonInline" type="button">Post</button>${extra}
+<script src="stub.js"></script><script src="${url("shared.js")}"></script><script src="${url("settings.js")}"></script>${READS}<script src="${url("content.js")}"></script>
 </body></html>`);
   return pathToFileURL(path.join(dir, "page.html")).href;
 };
+
+const HAS_BADGE = `!!document.querySelector(".xtobsky-badge")`;
 
 /** Start headless Chrome on a DevTools pipe; returns `send(method, params, sessionId)` and `close()`. */
 function launch() {
@@ -119,7 +152,7 @@ describe.skipIf(!chromePath)(chromePath ? "post button badge (headless Chrome)" 
     chrome = launch();
     const { targetId } = await chrome.send("Target.createTarget", { url: "about:blank" });
     ({ sessionId } = await chrome.send("Target.attachToTarget", { targetId, flatten: true }));
-    await chrome.send("Page.navigate", { url: page(dir) }, sessionId);
+    await chrome.send("Page.navigate", { url: page(dir, stub({ local: { bskyHandle: "alice.bsky.social" }, sync: {} })) }, sessionId);
   }, 30000);
 
   afterAll(async () => {
@@ -136,13 +169,23 @@ describe.skipIf(!chromePath)(chromePath ? "post button badge (headless Chrome)" 
     expect(await until(BADGE_FILL, (fill) => fill === "rgb(0, 0, 0)")).toBe("rgb(0, 0, 0)");
   }, 30000);
 
-  const HAS_BADGE = `!!document.querySelector(".xtobsky-badge")`;
-
-  /** Hand content.js `events` ([changes, areaName] pairs) one after the other; whether a badge is shown after each. */
+  /**
+   * Hand content.js `events` ([changes, areaName] pairs) one after the other, each once the reads the one
+   * before led to have settled; whether a badge is shown after each.
+   */
   async function fire(...events) {
     const { result } = await chrome.send("Runtime.evaluate", {
-      expression: `${JSON.stringify(events)}.map(([changes, areaName]) => { __fireStorageChange(changes, areaName); return ${HAS_BADGE}; })`,
+      expression: `(async () => {
+        const shown = [];
+        for (const [changes, areaName] of ${JSON.stringify(events)}) {
+          __fireStorageChange(changes, areaName);
+          await __settle();
+          shown.push(${HAS_BADGE});
+        }
+        return shown;
+      })()`,
       returnByValue: true,
+      awaitPromise: true,
     }, sessionId);
     return result.value;
   }
@@ -165,5 +208,70 @@ describe.skipIf(!chromePath)(chromePath ? "post button badge (headless Chrome)" 
       [{ crosspostEnabled: { oldValue: false, newValue: true } }, "sync"],
       [{ bskyHandle: { oldValue: "alice.bsky.social" } }, "local"],
     )).toEqual([true, false]);
+  }, 30000);
+});
+
+describe.skipIf(!chromePath)(chromePath ? "content.js reading the settings (headless Chrome)" : "content.js reading the settings (skipped: no Chrome at CHROME_PATH or the usual install path)", () => {
+  let chrome;
+  let sessionId;
+  const dirs = [];
+
+  /** Evaluate `expression` in the page, awaiting a promise it gives. */
+  async function evaluate(expression) {
+    const { result } = await chrome.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId);
+    return result.value;
+  }
+
+  /** Open a fresh stand-in page over `areas`, and wait until content.js has asked for its settings. */
+  async function load(areas, { holdLocal = false, extra = "" } = {}) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "xtobsky-page-"));
+    dirs.push(dir);
+    await chrome.send("Page.navigate", { url: page(dir, stub(areas, holdLocal), extra) }, sessionId);
+    const deadline = Date.now() + 5000;
+    while (!(await evaluate(`document.readyState === "complete" && window.__reads?.length > 0`))) {
+      if (Date.now() > deadline) throw new Error("content.js did not read its settings");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+
+  const BADGES = `[!!document.querySelector("#custom-post .xtobsky-badge"), !!document.querySelector('[data-testid="tweetButtonInline"] .xtobsky-badge')]`;
+
+  beforeAll(async () => {
+    chrome = launch();
+    const { targetId } = await chrome.send("Target.createTarget", { url: "about:blank" });
+    ({ sessionId } = await chrome.send("Target.attachToTarget", { targetId, flatten: true }));
+  }, 30000);
+
+  afterAll(async () => {
+    await chrome?.close();
+    for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true });
+  }, 30000);
+
+  it("takes what its first read gives", async () => {
+    await load({ local: { bskyHandle: "alice.bsky.social" }, sync: { crosspostEnabled: true } }, { holdLocal: true });
+    expect(await evaluate(`(async () => { __releaseLocal(); await __settle(); return ${HAS_BADGE}; })()`)).toBe(true);
+  }, 30000);
+
+  it("keeps a change that arrives while its first read is out", async () => {
+    await load({ local: { bskyHandle: "alice.bsky.social" }, sync: { crosspostEnabled: true } }, { holdLocal: true });
+    expect(await evaluate(`(async () => {
+      __fireStorageChange({ crosspostEnabled: { oldValue: true, newValue: false } }, "sync");
+      __releaseLocal();
+      await __settle();
+      return ${HAS_BADGE};
+    })()`)).toBe(false);
+  }, 30000);
+
+  it("takes the default selectors once a copy left in local is removed", async () => {
+    await load(
+      { local: { bskyHandle: "alice.bsky.social", customSelectors: { postButton: "#custom-post" } }, sync: {} },
+      { extra: `<button id="custom-post" type="button">Custom</button>` },
+    );
+    expect(await evaluate(`(async () => { await __settle(); return ${BADGES}; })()`)).toEqual([true, false]);
+    expect(await evaluate(`(async () => {
+      __fireStorageChange({ customSelectors: { oldValue: { postButton: "#custom-post" } } }, "local");
+      await __settle();
+      return ${BADGES};
+    })()`)).toEqual([false, true]);
   }, 30000);
 });
