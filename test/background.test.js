@@ -209,6 +209,14 @@ describe("removing mentions that do not exist", () => {
     expect(handleLookups).toEqual(["ghost.test"]);
   });
 
+  it("does not link the handle at the start of an X username while the option is off", async () => {
+    handles["alice.test"] = "did:example:alice";
+    const record = await post("see @alice.test_x now");
+    expect(record.text).toBe("see @alice.test_x now");
+    expect(record.facets).toBeUndefined();
+    expect(handleLookups).toEqual([]);
+  });
+
   it("removes a mention the service says does not resolve", async () => {
     store.removeInvalidMentions = true;
     handles["real.test"] = "did:example:real";

@@ -402,6 +402,21 @@ describe("parseFacets", () => {
       expect(facets[0].index.byteStart).toBe(0);
       expect(facets[0].index.byteEnd).toBe(utf8ByteLength(text));
     });
+
+    it("does not link part of a name that is not a valid handle", () => {
+      for (const text of ["see @alice.test_x now", "@foo_bar hi", "@a.-b"]) {
+        const mentions = parseFacets(text).filter((f) => f.features[0].$type === FACET_MENTION);
+        expect(mentions, text).toEqual([]);
+      }
+    });
+
+    it("links a handle followed by a trailing dot or by two or more dots", () => {
+      for (const [text, mention] of [["thanks @alice.test.", "@alice.test"], ["Hi @real.test...thanks!", "@real.test"]]) {
+        const [facet] = parseFacets(text).filter((f) => f.features[0].$type === FACET_MENTION);
+        const bytes = new TextEncoder().encode(text);
+        expect(new TextDecoder().decode(bytes.slice(facet.index.byteStart, facet.index.byteEnd))).toBe(mention);
+      }
+    });
   });
 
   describe("hashtags", () => {

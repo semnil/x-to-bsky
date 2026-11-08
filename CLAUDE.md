@@ -95,7 +95,7 @@ sequenceDiagram
 - `splitText(text)`: splits text over 300 graphemes automatically at line breaks and spaces. Prevents hard cuts inside URLs
 - `shortenUrlsInText(text)`: converts the URLs in text over 300 graphemes to a shortened display. Removes `http(s)://` and replaces whatever exceeds `URL_DISPLAY_LIMIT` graphemes with `...`. Returns `{ text, urlEntries }`
 - `buildShortenedUrlFacets(text, urlEntries)`: generates the facets for shortened URLs. `uri` keeps the original URL
-- `parseFacets(text)`: no lookbehind. Detects boundaries with `(^|\s)` and corrects the offsets
+- `parseFacets(text)`: no lookbehind. Detects boundaries with `(^|\s)` and corrects the offsets. A mention is a `findMentions` token whose whole name is a valid handle (`HANDLE_RE`), so no part of an X username such as `@alice.test_x` is linked
 - `findMentions(text)` / `removeMentions(text, mentions)`: the `@name` ranges in text, and the text without the given ranges and the spaces that separated them from the text around. A name is a run of letters, digits, `_`, `.` and `-` without a trailing `.` or `-` and without two or more dots in a row, so an X username with `_` is found whole
 - `extractFirstUrl(text)`: finds the first URL in the text (removing trailing punctuation)
 - `calcCoverRect(nw, nh, dw, dh, objectPosition)`: computes the visible-area crop for `object-fit: cover` (pure function; the same algorithm as `getVisibleRect` in content.js)
