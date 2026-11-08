@@ -83,6 +83,7 @@ const ERROR_MESSAGES = {
     loginFailed: "ログインに失敗しました: {detail}",
     uploadFailed: "画像のアップロードに失敗しました: {detail}",
     postFailed: "投稿に失敗しました: {detail}",
+    nothingToPost: "投稿する本文がありません: 存在しないメンションを除くと本文が空になりました。",
   },
   en: {
     notConfigured: "Bluesky credentials not configured. Open extension settings.",
@@ -90,6 +91,7 @@ const ERROR_MESSAGES = {
     loginFailed: "Login failed: {detail}",
     uploadFailed: "Blob upload failed: {detail}",
     postFailed: "Post failed: {detail}",
+    nothingToPost: "Nothing to post: the text is empty once the mentions that do not exist are removed.",
   },
 };
 

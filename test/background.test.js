@@ -6,11 +6,13 @@ import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 const store = {};
 let listener = null;
 let pages = {};
+let handles = {};
+let handleLookups = [];
 const requested = [];
 const uploads = [];
 const records = [];
 
-const json = (obj) => new Response(JSON.stringify(obj), { status: 200, headers: { "content-type": "application/json" } });
+const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
 
 /**
  * A stubbed response for `url`. A page with `redirectTo` redirects there: with `redirect: "error"`
@@ -37,6 +39,18 @@ function post(text) {
       else resolve(records.at(-1).record);
     });
   });
+}
+
+/** Cross-post `thread` and return the whole response. */
+function postThreadResponse(thread) {
+  return new Promise((resolve) => {
+    listener({ type: "POST_TO_BSKY", thread }, {}, resolve);
+  });
+}
+
+/** Cross-post `text` and return the whole response. */
+function postResponse(text) {
+  return postThreadResponse([{ text, images: [] }]);
 }
 
 const html = (props) =>
@@ -77,6 +91,15 @@ beforeAll(async () => {
       records.push(body);
       return json({ uri: `at://${body.repo}/app.bsky.feed.post/1`, cid: "cid" });
     }
+    if (requestUrl.includes("/xrpc/com.atproto.identity.resolveHandle")) {
+      const handle = new URL(requestUrl).searchParams.get("handle");
+      handleLookups.push(handle);
+      const answer = handles[handle];
+      if (answer === "error") throw new TypeError("Failed to fetch");
+      if (answer === "unavailable") return new Response("{}", { status: 503 });
+      if (!answer) return json({ error: "InvalidRequest", message: "Unable to resolve handle" }, 400);
+      return json({ did: answer });
+    }
     return respond(requestUrl, init);
   };
   await import("../background.js");
@@ -84,6 +107,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   pages = {};
+  handles = {};
+  handleLookups = [];
+  delete store.removeInvalidMentions;
   requested.length = 0;
   uploads.length = 0;
   records.length = 0;
@@ -170,5 +196,90 @@ describe("link card destinations", () => {
     const record = await post("see https://pub.example/page");
     expect(record.embed.external.thumb).toBeUndefined();
     expect(uploads).toEqual([]);
+  });
+});
+
+describe("removing mentions that do not exist", () => {
+  const mentionDids = (record) =>
+    (record.facets || []).flatMap((f) => f.features).filter((f) => f.$type === "app.bsky.richtext.facet#mention").map((f) => f.did);
+
+  it("keeps the text as written while the option is off", async () => {
+    const record = await post("hi @ghost.test");
+    expect(record.text).toBe("hi @ghost.test");
+    expect(handleLookups).toEqual(["ghost.test"]);
+  });
+
+  it("does not link the handle at the start of an X username while the option is off", async () => {
+    handles["alice.test"] = "did:example:alice";
+    const record = await post("see @alice.test_x now");
+    expect(record.text).toBe("see @alice.test_x now");
+    expect(record.facets).toBeUndefined();
+    expect(handleLookups).toEqual([]);
+  });
+
+  it("removes a mention the service says does not resolve", async () => {
+    store.removeInvalidMentions = true;
+    handles["real.test"] = "did:example:real";
+    const record = await post("hi @ghost.test and @real.test");
+    expect(record.text).toBe("hi and @real.test");
+    expect(mentionDids(record)).toEqual(["did:example:real"]);
+  });
+
+  it("removes a handle that is not a valid handle", async () => {
+    store.removeInvalidMentions = true;
+    const record = await post("@nodots hello");
+    expect(record.text).toBe("hello");
+  });
+
+  it("keeps a mention whose lookup failed", async () => {
+    store.removeInvalidMentions = true;
+    handles["flaky.test"] = "error";
+    handles["down.test"] = "unavailable";
+    const record = await post("@flaky.test @down.test hi");
+    expect(record.text).toBe("@flaky.test @down.test hi");
+  });
+
+  it("removes an X username with underscores whole", async () => {
+    store.removeInvalidMentions = true;
+    const record = await post("hello @foo_bar @_foobar @foobar_ world");
+    expect(record.text).toBe("hello world");
+    expect(handleLookups).toContain("foo_bar");
+  });
+
+  it("keeps the text after an existing mention and two or more dots", async () => {
+    store.removeInvalidMentions = true;
+    handles["real.test"] = "did:example:real";
+    const record = await post("Hi @real.test...thanks!");
+    expect(record.text).toBe("Hi @real.test...thanks!");
+    expect(handleLookups).not.toContain("real.test...thanks");
+    expect(mentionDids(record)).toEqual(["did:example:real"]);
+  });
+
+  it("keeps the images of a post whose text is left empty", async () => {
+    store.removeInvalidMentions = true;
+    const image = { base64: "data:image/png;base64,SU1BR0U=", mimeType: "image/png", width: 2, height: 1 };
+    const res = await postThreadResponse([{ text: "@foo_bar", images: [image] }]);
+    expect(res.ok).toBe(true);
+    expect(records).toHaveLength(1);
+    expect(records[0].record.text).toBe("");
+    expect(records[0].record.embed.images).toHaveLength(1);
+    expect(uploads).toEqual(["IMAGE"]);
+  });
+
+  it("starts the thread at the next post when the first is left empty", async () => {
+    store.removeInvalidMentions = true;
+    const res = await postThreadResponse([{ text: "@foo_bar", images: [] }, { text: "next", images: [] }]);
+    expect(res.ok).toBe(true);
+    expect(res.postCount).toBe(1);
+    expect(records.map((r) => r.record.text)).toEqual(["next"]);
+    expect(records[0].record.reply).toBeUndefined();
+  });
+
+  it("fails with a message when no text is left", async () => {
+    store.removeInvalidMentions = true;
+    const res = await postResponse("@ghost.test");
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe("nothingToPost");
+    expect(records).toEqual([]);
   });
 });

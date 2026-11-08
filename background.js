@@ -5,6 +5,8 @@ import {
   shortenUrlsInText,
   buildShortenedUrlFacets,
   parseFacets,
+  findMentions,
+  removeMentions,
   FACET_MENTION,
   extractFirstUrl,
   isPublicHttpUrl,
@@ -110,19 +112,38 @@ async function _createSession() {
 }
 
 /**
- * Resolve a mention handle to a DID.
+ * Look a handle up. Resolves to the DID, to null when the service answers that the handle
+ * does not resolve (HTTP 400), and to undefined when the service could not be asked or failed.
  */
-async function resolveHandle(handle) {
+async function lookupHandle(handle) {
   try {
     const res = await fetch(
       `${BSKY_SERVICE}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(handle)}`
     );
-    if (!res.ok) return null;
+    if (res.status === 400) return null;
+    if (!res.ok) return undefined;
     const data = await res.json();
-    return data.did;
+    return data.did || null;
   } catch {
-    return null;
+    return undefined;
   }
+}
+
+/**
+ * Resolve a mention handle to a DID. Null when it does not resolve or the lookup failed.
+ */
+async function resolveHandle(handle) {
+  return (await lookupHandle(handle)) ?? null;
+}
+
+/**
+ * Remove the mentions whose handle the service says does not resolve.
+ * A mention whose lookup failed is kept.
+ */
+async function removeUnresolvableMentions(text) {
+  const mentions = findMentions(text);
+  const dids = await Promise.all(mentions.map((mention) => lookupHandle(mention.handle)));
+  return removeMentions(text, mentions.filter((_, i) => dids[i] === null));
 }
 
 /**
@@ -529,10 +550,17 @@ async function createPost(text, images = [], parent = null, root = null, sess = 
 async function postThread(thread) {
   const sess = await createSession();
 
+  const { removeInvalidMentions } = await chrome.storage.local.get("removeInvalidMentions");
+
   // Expand: shorten long URLs, then split any remaining long posts
   const expanded = [];
   for (const post of thread) {
-    const { text, urlEntries } = shortenUrlsInText(post.text);
+    let source = post.text;
+    if (removeInvalidMentions) {
+      source = await removeUnresolvableMentions(source);
+      if (source !== post.text && !source.trim() && !post.images?.length) continue;
+    }
+    const { text, urlEntries } = shortenUrlsInText(source);
     const chunks = splitText(text);
     chunks.forEach((chunk, i) => {
       let chunkUrlEntries = urlEntries;
@@ -552,6 +580,8 @@ async function postThread(thread) {
       });
     });
   }
+
+  if (expanded.length === 0) throw new CodedError("nothingToPost");
 
   // Posts must be sequential (each needs parent URI/CID for reply chain)
   const results = [];

@@ -11,6 +11,8 @@ import {
   buildShortenedUrlFacets,
   buildByteOffsetMap,
   parseFacets,
+  findMentions,
+  removeMentions,
   extractFirstUrl,
   calcCoverRect,
   isPublicHttpUrl,
@@ -400,6 +402,21 @@ describe("parseFacets", () => {
       expect(facets[0].index.byteStart).toBe(0);
       expect(facets[0].index.byteEnd).toBe(utf8ByteLength(text));
     });
+
+    it("does not link part of a name that is not a valid handle", () => {
+      for (const text of ["see @alice.test_x now", "@foo_bar hi", "@a.-b"]) {
+        const mentions = parseFacets(text).filter((f) => f.features[0].$type === FACET_MENTION);
+        expect(mentions, text).toEqual([]);
+      }
+    });
+
+    it("links a handle followed by a trailing dot or by two or more dots", () => {
+      for (const [text, mention] of [["thanks @alice.test.", "@alice.test"], ["Hi @real.test...thanks!", "@real.test"]]) {
+        const [facet] = parseFacets(text).filter((f) => f.features[0].$type === FACET_MENTION);
+        const bytes = new TextEncoder().encode(text);
+        expect(new TextDecoder().decode(bytes.slice(facet.index.byteStart, facet.index.byteEnd))).toBe(mention);
+      }
+    });
   });
 
   describe("hashtags", () => {
@@ -515,6 +532,85 @@ describe("parseFacets", () => {
       );
       expect(extracted).toBe("#ブルースカイ");
     });
+  });
+});
+
+describe("findMentions", () => {
+  it("returns the handle and the index range of each mention", () => {
+    const text = "hi @alice.test and @bob";
+    const found = findMentions(text);
+    expect(found.map((m) => m.handle)).toEqual(["alice.test", "bob"]);
+    expect(found.map((m) => text.slice(m.start, m.end))).toEqual(["@alice.test", "@bob"]);
+  });
+
+  it("ignores an @ that does not follow whitespace or the start", () => {
+    expect(findMentions("mail me at a@b.com")).toEqual([]);
+  });
+
+  it("finds an X username with underscores whole", () => {
+    expect(findMentions("@foo_bar @_foobar @foobar_").map((m) => m.handle)).toEqual(["foo_bar", "_foobar", "foobar_"]);
+  });
+
+  it("finds a handle followed by an underscore whole", () => {
+    expect(findMentions("see @alice.test_x now").map((m) => m.handle)).toEqual(["alice.test_x"]);
+  });
+
+  it("ends the mention before two or more dots in a row", () => {
+    const text = "Hi @real.test...thanks! @a--b.test";
+    expect(findMentions(text).map((m) => text.slice(m.start, m.end))).toEqual(["@real.test", "@a--b.test"]);
+  });
+
+  it("leaves a trailing dot or hyphen out of the mention", () => {
+    const text = "thanks @alice.test. and @bob-";
+    expect(findMentions(text).map((m) => text.slice(m.start, m.end))).toEqual(["@alice.test", "@bob"]);
+  });
+
+  it("finds the same valid handles as parseFacets", () => {
+    const text = "@a.test x @b.test\n@c";
+    const facets = parseFacets(text).filter((f) => f.features[0].$type === FACET_MENTION);
+    expect(findMentions(text).map((m) => m.handle)).toEqual(facets.map((f) => f.features[0].did));
+  });
+});
+
+describe("removeMentions", () => {
+  const remove = (text, handles) =>
+    removeMentions(text, findMentions(text).filter((m) => handles.includes(m.handle)));
+
+  it("removes a mention in the middle with one of its spaces", () => {
+    expect(remove("hello @ghost world", ["ghost"])).toBe("hello world");
+  });
+
+  it("removes a mention at the start with the spaces after it", () => {
+    expect(remove("@ghost  hello", ["ghost"])).toBe("hello");
+  });
+
+  it("removes a mention at the end with the spaces before it", () => {
+    expect(remove("hello @ghost", ["ghost"])).toBe("hello");
+  });
+
+  it("keeps the line structure when a mention is alone on a line", () => {
+    expect(remove("hello\n@ghost\nworld", ["ghost"])).toBe("hello\n\nworld");
+  });
+
+  it("removes only the given mentions", () => {
+    expect(remove("@ghost hi @alice.test @ghost2", ["ghost", "ghost2"])).toBe("hi @alice.test");
+  });
+
+  it("removes an X username with underscores whole", () => {
+    expect(remove("hello @foo_bar world", ["foo_bar"])).toBe("hello world");
+    expect(remove("hello @foobar_ world", ["foobar_"])).toBe("hello world");
+  });
+
+  it("removes adjacent mentions", () => {
+    expect(remove("@a @b hi", ["a", "b"])).toBe("hi");
+  });
+
+  it("leaves text without the given mentions unchanged", () => {
+    expect(remove("hello @alice.test", [])).toBe("hello @alice.test");
+  });
+
+  it("leaves an empty string when the text is only the mention", () => {
+    expect(remove("@ghost", ["ghost"])).toBe("");
   });
 });
 

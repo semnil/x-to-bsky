@@ -154,6 +154,31 @@ function cleanUrlMatch(raw) {
 
 // ─── Facet Parsing (no lookbehind) ──────────────────────
 
+// (start-of-string | whitespace) followed by @ and a run of letters, digits, "_", "." and "-" that starts and
+// ends with a letter, digit or "_" and has no ".." in it: a Bluesky handle or an X username, without a trailing
+// "." or "-" and without what follows two or more dots in a row
+const MENTION_TOKEN_RE_GLOBAL = /(^|\s)(@([A-Za-z0-9_](?:(?:[A-Za-z0-9_-]|\.(?!\.))*[A-Za-z0-9_])?))/gm;
+
+/**
+ * Find the mentions in text, in order of appearance. A mention is the whole "@name" token,
+ * including the "_" an X username may contain, so a token that is not a valid handle is found whole.
+ * @param {string} text
+ * @returns {Array<{ handle: string, start: number, end: number }>} `start` / `end` are string indices of "@name"
+ */
+function findMentions(text) {
+  const mentions = [];
+  MENTION_TOKEN_RE_GLOBAL.lastIndex = 0;
+  let match;
+  while ((match = MENTION_TOKEN_RE_GLOBAL.exec(text)) !== null) {
+    const start = match.index + match[1].length;
+    mentions.push({ handle: match[3], start, end: start + match[2].length });
+  }
+  return mentions;
+}
+
+// A whole string that is a syntactically valid handle: dot-separated labels of letters, digits and inner "-"
+const HANDLE_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
 /**
  * Parse rich text facets (links, mentions, hashtags).
  * Uses boundary-aware matching without lookbehind assertions.
@@ -175,15 +200,13 @@ function parseFacets(text) {
     });
   }
 
-  // Mention detection: (start-of-string | whitespace) followed by @handle
+  // Mention detection: the "@name" tokens of findMentions whose whole name is a valid handle
   // The did field temporarily holds the handle; resolveMentionFacets replaces it with the actual DID
-  const mentionRegex = /(^|\s)(@([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*))/gm;
-  while ((match = mentionRegex.exec(text)) !== null) {
-    const mentionStart = match.index + match[1].length;
-    const mention = match[2]; // @handle
+  for (const { handle, start, end } of findMentions(text)) {
+    if (!HANDLE_RE.test(handle)) continue;
     facets.push({
-      index: { byteStart: byteMap[mentionStart], byteEnd: byteMap[mentionStart + mention.length] },
-      features: [{ $type: FACET_MENTION, did: match[3] }],
+      index: { byteStart: byteMap[start], byteEnd: byteMap[end] },
+      features: [{ $type: FACET_MENTION, did: handle }],
     });
   }
 
@@ -199,6 +222,29 @@ function parseFacets(text) {
   }
 
   return facets;
+}
+
+/**
+ * Remove mentions from text together with the spaces that separated them from the text around:
+ * the spaces after a mention that starts a line or follows a space, and the spaces before one that ends a line.
+ * @param {string} text
+ * @param {Array<{ start: number, end: number }>} mentions - ranges from findMentions
+ * @returns {string}
+ */
+function removeMentions(text, mentions) {
+  let out = text;
+  for (const { start, end } of [...mentions].sort((a, b) => b.start - a.start)) {
+    let from = start;
+    let to = end;
+    if (from === 0 || /\s/.test(out[from - 1])) {
+      while (to < out.length && /[ \t\u3000]/.test(out[to])) to++;
+    }
+    if (to === out.length || out[to] === "\n" || out[to] === "\r") {
+      while (from > 0 && /[ \t\u3000]/.test(out[from - 1])) from--;
+    }
+    out = out.slice(0, from) + out.slice(to);
+  }
+  return out;
 }
 
 // ─── URL Shortening ──────────────────────────────────
@@ -406,6 +452,8 @@ export {
   buildShortenedUrlFacets,
   buildByteOffsetMap,
   parseFacets,
+  findMentions,
+  removeMentions,
   extractFirstUrl,
   calcCoverRect,
   isPublicHttpUrl,
