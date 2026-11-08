@@ -122,17 +122,19 @@
    * written to sync on its own before it is removed from local, so a reader finds it in one of the two,
    * and a key sync refuses stays in local, where readSettings still reads it. includeYouTubeCard and
    * youtubeCardThumbnail, where local holds no includeLinkCard, are first renamed in local to
-   * includeLinkCard and linkCardThumbnail, and then moved as those. Rejects, once every key has been
-   * tried, when sync refused any.
+   * includeLinkCard and linkCardThumbnail, and then moved as those; where local holds includeLinkCard,
+   * they are dropped. Rejects, once every key has been tried, when sync refused any.
    */
   function moveSettingsToSync(storage = chrome.storage, locks = navigator.locks) {
     return locks.request(SETTINGS_LOCK, async () => {
       const local = await storage.local.get([...SYNCED_SETTING_KEYS, ...LEGACY_LINK_CARD_KEYS]);
-      if (local.includeLinkCard === undefined && local.includeYouTubeCard !== undefined) {
-        const renamed = { includeLinkCard: !!local.includeYouTubeCard, linkCardThumbnail: local.youtubeCardThumbnail !== false };
-        await storage.local.set(renamed);
+      if (LEGACY_LINK_CARD_KEYS.some((key) => local[key] !== undefined)) {
+        if (local.includeLinkCard === undefined && local.includeYouTubeCard !== undefined) {
+          const renamed = { includeLinkCard: !!local.includeYouTubeCard, linkCardThumbnail: local.youtubeCardThumbnail !== false };
+          await storage.local.set(renamed);
+          Object.assign(local, renamed);
+        }
         await storage.local.remove(LEGACY_LINK_CARD_KEYS);
-        Object.assign(local, renamed);
       }
       const keys = SYNCED_SETTING_KEYS.filter((key) => local[key] !== undefined);
       if (!keys.length) return;

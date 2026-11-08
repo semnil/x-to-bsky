@@ -132,12 +132,15 @@ describe("moveSettingsToSync", () => {
     expect(storage.areas.local).toEqual({});
   });
 
-  it("leaves includeYouTubeCard alone where local holds includeLinkCard", async () => {
+  it("drops includeYouTubeCard and youtubeCardThumbnail where local holds includeLinkCard, on every start", async () => {
     const storage = createStorage();
-    Object.assign(storage.areas.local, { includeLinkCard: false, includeYouTubeCard: true });
+    Object.assign(storage.areas.local, { includeLinkCard: true, includeYouTubeCard: true, youtubeCardThumbnail: false });
+    const keys = ["includeLinkCard", "linkCardThumbnail"];
     await moveSettingsToSync(storage);
-    expect(storage.areas.sync).toEqual({ includeLinkCard: false });
-    expect(storage.areas.local).toEqual({ includeYouTubeCard: true });
+    expect(await readSettings(keys, storage)).toEqual({ includeLinkCard: true });
+    await moveSettingsToSync(storage);
+    expect(await readSettings(keys, storage)).toEqual({ includeLinkCard: true });
+    expect(storage.areas).toEqual({ local: {}, sync: { includeLinkCard: true } });
   });
 
   it("writes nothing when local holds no synced setting", async () => {
