@@ -17,8 +17,8 @@ const i18n = {
   },
 };
 
-// renderIcons, translate and applyMessages are provided by shared.js, and readSettings and writeSettings
-// by settings.js (both loaded before this file).
+// renderIcons, translate and applyMessages are provided by shared.js, and readSettings, writeSettings and
+// settingChanges by settings.js (both loaded before this file).
 applyMessages(i18n);
 renderIcons();
 
@@ -54,6 +54,13 @@ toggle.addEventListener("change", () => {
       toggle.checked = (await readSettings(["crosspostEnabled"])).crosspostEnabled !== false;
     }
   );
+});
+
+// Show the crosspost setting as stored when it changes on another page, or in another Chrome through
+// Chrome sync.
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  const change = settingChanges(changes, areaName).crosspostEnabled;
+  if (change) toggle.checked = change.newValue !== false;
 });
 
 // Settings link

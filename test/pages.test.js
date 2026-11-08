@@ -149,6 +149,51 @@ describe("options.html", () => {
     expect(storage.areas.sync.postReplies).toBe(true);
   });
 
+  it("shows a post option as it is changed elsewhere", async () => {
+    const storage = createStorage();
+    storage.areas.sync.postReplies = false;
+    const byId = await load(storage);
+    expect(byId("postReplies").checked).toBe(false);
+    await storage.sync.set({ postReplies: true });
+    expect(await until(() => byId("postReplies").checked === true)).toBe(true);
+  });
+
+  it("keeps showing the latest stored setting when an earlier read answers late", async () => {
+    const storage = createStorage();
+    storage.areas.sync.postReplies = false;
+    const byId = await load(storage);
+    // The read the first change starts takes the stored value at once and answers after the second's.
+    const get = storage.sync.get;
+    let release;
+    const late = new Promise((resolve) => { release = resolve; });
+    let first = true;
+    storage.sync.get = (keys, callback) => {
+      const answer = get(keys, callback);
+      if (!first) return answer;
+      first = false;
+      return late.then(() => answer);
+    };
+    await storage.sync.set({ postReplies: true });
+    storage.sync.get = get;
+    await storage.sync.set({ postReplies: false });
+    await writesDone();
+    release();
+    // The stand-in storage and permissions answer with resolved promises, so the late read has ended
+    // by the next task.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(byId("postReplies").checked).toBe(false);
+  });
+
+  it("keeps the link card toggle off when includeLinkCard arrives where this Chrome lacks <all_urls>, and writes nothing", async () => {
+    const storage = createStorage();
+    const byId = await load(storage, { allUrls: false, request: false });
+    await storage.sync.set({ includeLinkCard: true, includeQuoteUrl: true });
+    expect(await until(() => byId("includeQuoteUrl").checked === true)).toBe(true);
+    await writesDone();
+    expect(byId("includeLinkCard").checked).toBe(false);
+    expect(storage.writes).toEqual([["sync", "set", ["includeLinkCard", "includeQuoteUrl"]]]);
+  });
+
   it("shows why selectors were not saved", async () => {
     const storage = createStorage();
     const byId = await load(storage);
@@ -168,6 +213,17 @@ describe("popup.html", () => {
     const byId = open("popup.html", storage);
     expect(await until(() => byId("handle").textContent === "@bob.test")).toBe(true);
     expect(byId("toggle").checked).toBe(false);
+  });
+
+  it("shows the crosspost toggle as it is changed elsewhere", async () => {
+    const storage = createStorage();
+    storage.areas.local.bskyHandle = "bob.test";
+    storage.areas.sync.crosspostEnabled = true;
+    const byId = open("popup.html", storage);
+    expect(await until(() => byId("handle").textContent === "@bob.test")).toBe(true);
+    expect(byId("toggle").checked).toBe(true);
+    await storage.sync.set({ crosspostEnabled: false });
+    expect(await until(() => byId("toggle").checked === false)).toBe(true);
   });
 
   it("stores the crosspost toggle in sync", async () => {

@@ -102,8 +102,8 @@ function t(key) {
 }
 
 // DEFAULT_SELECTORS, renderIcons, translate, applyMessages and errorText are provided by shared.js, and
-// readSettings, writeSettings, removeSettings, linkCardsOn and LINK_CARD_PERMISSION by settings.js
-// (both loaded before this file).
+// readSettings, writeSettings, removeSettings, settingChanges, localCopyChanges, linkCardsOn and
+// LINK_CARD_PERMISSION by settings.js (both loaded before this file).
 
 const SELECTOR_KEYS = Object.keys(DEFAULT_SELECTORS);
 
@@ -131,20 +131,34 @@ const behaviorMessageEl = document.getElementById("behaviorMessage");
 
 // ─── Load Settings ───────────────────────────────────────
 
+const TOGGLE_KEYS = ["includeQuoteUrl", "postReplies", "removeInvalidMentions", "includeLinkCard", "linkCardThumbnail"];
+// The renderToggles calls made so far: a call shows what it read only while it is the latest
+let renderCount = 0;
+
 /**
  * Show the stored behavior settings on their toggles. The link card toggle is on only where link cards
  * are made in this Chrome (linkCardsOn): a stored includeLinkCard, which may come from another Chrome
  * through Chrome sync, shows off here while this Chrome does not hold the permission, and stays stored.
  */
 async function renderToggles() {
-  const data = await readSettings(["includeQuoteUrl", "postReplies", "removeInvalidMentions", "includeLinkCard", "linkCardThumbnail"]);
+  const render = ++renderCount;
+  const data = await readSettings(TOGGLE_KEYS);
+  const linkCards = await linkCardsOn(data);
+  if (render !== renderCount) return;
   includeQuoteUrlToggle.checked = !!data.includeQuoteUrl;
   postRepliesToggle.checked = !!data.postReplies;
   removeInvalidMentionsToggle.checked = !!data.removeInvalidMentions;
   linkCardThumbnailToggle.checked = data.linkCardThumbnail !== false;
-  includeLinkCardToggle.checked = await linkCardsOn(data);
+  includeLinkCardToggle.checked = linkCards;
   updateLinkCardSubToggle();
 }
+
+// Show the toggles as stored again when their settings change in another tab, or in another Chrome
+// through Chrome sync. The text fields keep what is typed in them.
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  const changed = [...Object.keys(settingChanges(changes, areaName)), ...localCopyChanges(changes, areaName)];
+  if (changed.some((key) => TOGGLE_KEYS.includes(key))) renderToggles();
+});
 
 Promise.all([
   readSettings(["bskyHandle", "bskyAppPassword", "customSelectors"]).then((data) => {
