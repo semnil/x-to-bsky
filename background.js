@@ -20,6 +20,8 @@ const THUMB_MAX_DIMENSION = 1000;
 
 // Session cache (lives as long as the service worker)
 let session = null;
+// The handle and App Password the cached session was logged in with
+let sessionCredentials = null;
 
 // ─── Authentication ──────────────────────────────────────
 
@@ -27,7 +29,8 @@ let session = null;
 let sessionPromise = null;
 
 /**
- * Authenticate with Bluesky. Reuses cached session via refreshSession.
+ * Authenticate with Bluesky. Reuses cached session via refreshSession while the stored handle and
+ * App Password are the ones it was logged in with; otherwise logs in again with the stored ones.
  * On failure, clears cache and performs fresh login with clear error messages.
  * Concurrent calls share the same in-flight promise.
  */
@@ -62,6 +65,11 @@ async function _createSession() {
 
   if (!bskyHandle || !bskyAppPassword) {
     throw new CodedError("notConfigured");
+  }
+
+  // A session logged in with other credentials is not reused
+  if (sessionCredentials?.handle !== bskyHandle || sessionCredentials?.password !== bskyAppPassword) {
+    session = null;
   }
 
   // Try to refresh existing session
@@ -108,6 +116,7 @@ async function _createSession() {
   }
 
   session = await res.json();
+  sessionCredentials = { handle: bskyHandle, password: bskyAppPassword };
   return session;
 }
 
