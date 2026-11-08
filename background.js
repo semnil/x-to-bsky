@@ -12,6 +12,8 @@ import {
   isPublicHttpUrl,
   isWebStoreUrl,
 } from "./lib.js";
+// settings.js puts its names on globalThis; readSettings, linkCardsOn and moveSettingsToSync are used here.
+import "./settings.js";
 
 const BSKY_SERVICE = "https://bsky.social";
 const MAX_IMAGES = 4;
@@ -55,10 +57,7 @@ function errorResponse(err) {
 }
 
 async function _createSession() {
-  const { bskyHandle, bskyAppPassword } = await chrome.storage.local.get([
-    "bskyHandle",
-    "bskyAppPassword",
-  ]);
+  const { bskyHandle, bskyAppPassword } = await readSettings(["bskyHandle", "bskyAppPassword"]);
 
   if (!bskyHandle || !bskyAppPassword) {
     throw new CodedError("notConfigured");
@@ -490,10 +489,10 @@ async function createPost(text, images = [], parent = null, root = null, sess = 
   } else {
     const linkUrl = urlEntries.length > 0 ? urlEntries[0].original : extractFirstUrl(text);
     if (linkUrl) {
-      embedPromise = chrome.storage.local.get(["includeLinkCard", "linkCardThumbnail"]).then(
-        ({ includeLinkCard, linkCardThumbnail }) =>
-          includeLinkCard
-            ? buildLinkEmbed(linkUrl, sess.accessJwt, linkCardThumbnail !== false)
+      embedPromise = readSettings(["includeLinkCard", "linkCardThumbnail"]).then(
+        async (settings) =>
+          (await linkCardsOn(settings))
+            ? buildLinkEmbed(linkUrl, sess.accessJwt, settings.linkCardThumbnail !== false)
             : null
       ).catch(() => null);
     }
@@ -550,7 +549,7 @@ async function createPost(text, images = [], parent = null, root = null, sess = 
 async function postThread(thread) {
   const sess = await createSession();
 
-  const { removeInvalidMentions } = await chrome.storage.local.get("removeInvalidMentions");
+  const { removeInvalidMentions } = await readSettings(["removeInvalidMentions"]);
 
   // Expand: shorten long URLs, then split any remaining long posts
   const expanded = [];
@@ -625,7 +624,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "GET_STATUS") {
-    chrome.storage.local.get(["bskyHandle", "crosspostEnabled"], (data) => {
+    readSettings(["bskyHandle", "crosspostEnabled"]).then((data) => {
       sendResponse({
         configured: !!data.bskyHandle,
         enabled: data.crosspostEnabled !== false,
@@ -638,18 +637,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 // ─── Settings Migration ─────────────────────────────────
 
-chrome.runtime.onInstalled.addListener(({ reason }) => {
-  if (reason !== "update") return;
-  chrome.storage.local.get(
-    ["includeLinkCard", "linkCardThumbnail", "includeYouTubeCard", "youtubeCardThumbnail"],
-    (data) => {
-      if (data.includeLinkCard !== undefined) return; // already migrated
-      if (data.includeYouTubeCard === undefined) return; // nothing to migrate
-      chrome.storage.local.set({
-        includeLinkCard: !!data.includeYouTubeCard,
-        linkCardThumbnail: data.youtubeCardThumbnail !== false,
-      });
-      chrome.storage.local.remove(["includeYouTubeCard", "youtubeCardThumbnail"]);
-    }
-  );
-});
+// Every start: the settings an earlier version kept in chrome.storage.local move into chrome.storage.sync,
+// and a key sync refused is tried again on the next start. With nothing left to move, this is one read.
+moveSettingsToSync().catch((err) => console.error("[x-to-bsky] settings not moved to sync:", err));

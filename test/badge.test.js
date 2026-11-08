@@ -6,7 +6,8 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 // content.js and content.css run in headless Chrome, driven over the DevTools protocol, on a stand-in
-// for X's compose toolbar with the extension APIs stubbed (credentials set, crossposting on).
+// for X's compose toolbar with the extension APIs stubbed (the handle in chrome.storage.local, crossposting
+// on). window.__fireStorageChange(changes, areaName) hands content.js a chrome.storage.onChanged event.
 // Chrome is taken from CHROME_PATH or the platform's usual install path; without one, the cases are
 // skipped under a name that says so.
 
@@ -22,7 +23,20 @@ const chromePath = [process.env.CHROME_PATH, ...(CHROME_PATHS[process.platform] 
 
 const STUB = `window.chrome = {
   runtime: { id: "test", lastError: undefined, sendMessage(msg, cb) { setTimeout(() => cb({}), 0); } },
-  storage: { local: { get: (keys, cb) => cb({ bskyHandle: "alice.bsky.social" }) }, onChanged: { addListener() {} } },
+  storage: (() => {
+    const areas = { local: { bskyHandle: "alice.bsky.social" }, sync: {} };
+    const listeners = [];
+    const area = (name) => ({
+      get(keys, cb) {
+        const out = {};
+        for (const key of [].concat(keys)) if (key in areas[name]) out[key] = areas[name][key];
+        if (cb) return void cb(out);
+        return Promise.resolve(out);
+      },
+    });
+    window.__fireStorageChange = (changes, areaName) => listeners.forEach((listener) => listener(changes, areaName));
+    return { local: area("local"), sync: area("sync"), onChanged: { addListener: (listener) => listeners.push(listener) } };
+  })(),
 };`;
 
 const page = (dir) => {
@@ -33,7 +47,7 @@ const page = (dir) => {
 <body style="background: #ffffff; padding: 40px">
 <div data-testid="tweetTextarea_0"></div>
 <button data-testid="tweetButtonInline" type="button">Post</button>
-<script src="stub.js"></script><script src="${url("shared.js")}"></script><script src="${url("content.js")}"></script>
+<script src="stub.js"></script><script src="${url("shared.js")}"></script><script src="${url("settings.js")}"></script><script src="${url("content.js")}"></script>
 </body></html>`);
   return pathToFileURL(path.join(dir, "page.html")).href;
 };
@@ -120,5 +134,36 @@ describe.skipIf(!chromePath)(chromePath ? "post button badge (headless Chrome)" 
   it("refills the badge once the background changes and the DOM changes", async () => {
     await chrome.send("Runtime.evaluate", { expression: `document.body.style.background = "#000000"; document.body.appendChild(document.createElement("div"));` }, sessionId);
     expect(await until(BADGE_FILL, (fill) => fill === "rgb(0, 0, 0)")).toBe("rgb(0, 0, 0)");
+  }, 30000);
+
+  const HAS_BADGE = `!!document.querySelector(".xtobsky-badge")`;
+
+  /** Hand content.js `events` ([changes, areaName] pairs) one after the other; whether a badge is shown after each. */
+  async function fire(...events) {
+    const { result } = await chrome.send("Runtime.evaluate", {
+      expression: `${JSON.stringify(events)}.map(([changes, areaName]) => { __fireStorageChange(changes, areaName); return ${HAS_BADGE}; })`,
+      returnByValue: true,
+    }, sessionId);
+    return result.value;
+  }
+
+  it("takes no change of the handle in sync, where it is not kept", async () => {
+    expect(await until(HAS_BADGE, Boolean)).toBe(true);
+    expect(await fire([{ bskyHandle: { oldValue: "alice.bsky.social" } }, "sync"])).toEqual([true]);
+  }, 30000);
+
+  it("takes crossposting turned off in sync, and not the move to sync removing its local copy", async () => {
+    expect(await fire(
+      [{ bskyHandle: { newValue: "alice.bsky.social" } }, "local"],
+      [{ crosspostEnabled: { newValue: false } }, "sync"],
+      [{ crosspostEnabled: { oldValue: false } }, "local"],
+    )).toEqual([true, false, false]);
+  }, 30000);
+
+  it("takes the handle removed from local", async () => {
+    expect(await fire(
+      [{ crosspostEnabled: { oldValue: false, newValue: true } }, "sync"],
+      [{ bskyHandle: { oldValue: "alice.bsky.social" } }, "local"],
+    )).toEqual([true, false]);
   }, 30000);
 });

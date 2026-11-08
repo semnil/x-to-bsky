@@ -6,16 +6,19 @@ const i18n = {
     connectedTo: "接続先:",
     crosspostLabel: "クロスポスト",
     openSettings: "設定を開く",
+    saveFailed: "保存できませんでした: ",
   },
   en: {
     notConfigured: "Not set up. Enter your Bluesky credentials on the settings page.",
     connectedTo: "Connected as:",
     crosspostLabel: "Crosspost",
     openSettings: "Open settings",
+    saveFailed: "Could not save: ",
   },
 };
 
-// renderIcons and applyMessages are provided by shared.js (loaded before this file).
+// renderIcons, translate and applyMessages are provided by shared.js, and readSettings and writeSettings
+// by settings.js (both loaded before this file).
 applyMessages(i18n);
 renderIcons();
 
@@ -24,9 +27,10 @@ const statusEl = document.getElementById("status");
 const handleEl = document.getElementById("handle");
 const notConfigured = document.getElementById("not-configured");
 const settingsLink = document.getElementById("settings-link");
+const saveError = document.getElementById("save-error");
 
 // Load state directly from storage (avoids service worker wake-up issues)
-chrome.storage.local.get(["bskyHandle", "crosspostEnabled"], (data) => {
+readSettings(["bskyHandle", "crosspostEnabled"]).then((data) => {
   toggle.checked = data.crosspostEnabled !== false;
 
   if (data.bskyHandle) {
@@ -37,9 +41,19 @@ chrome.storage.local.get(["bskyHandle", "crosspostEnabled"], (data) => {
   }
 });
 
-// Toggle handler — storage.onChanged in content.js picks up the change automatically
+// Toggle handler — storage.onChanged in content.js picks up the change automatically. A write that
+// sync refuses shows Chrome's reason, and the toggle shows the stored setting again.
 toggle.addEventListener("change", () => {
-  chrome.storage.local.set({ crosspostEnabled: toggle.checked });
+  writeSettings({ crosspostEnabled: toggle.checked }).then(
+    () => {
+      saveError.style.display = "none";
+    },
+    async (err) => {
+      saveError.textContent = translate(i18n, "saveFailed") + err.message;
+      saveError.style.display = "block";
+      toggle.checked = (await readSettings(["crosspostEnabled"])).crosspostEnabled !== false;
+    }
+  );
 });
 
 // Settings link

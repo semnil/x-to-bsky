@@ -14,9 +14,10 @@ const i18n = {
     passwordHint: 'Bluesky → <strong>設定</strong> → <strong>プライバシーとセキュリティ</strong> → <strong>アプリパスワード</strong> で発行できます',
     saveBtn: "保存",
     testBtn: "接続テスト",
-    securityNote: '<strong>セキュリティについて</strong><br>• 認証情報は chrome.storage.local に保存され、この拡張のみがアクセスします。<br>• 認証情報の送信先は bsky.social のみです。リンクカード有効時は対象 URL のメタデータを取得しますが、認証情報やユーザーデータは送信しません。<br>• アプリパスワードは Bluesky の 設定 → プライバシーとセキュリティ → アプリパスワード からいつでも無効化できます。',
+    securityNote: '<strong>セキュリティについて</strong><br>• ハンドルと App Password はこのパソコンの chrome.storage.local に保存され、この拡張のみがアクセスします。<br>• その他の設定は chrome.storage.sync に保存されます。Chrome の同期がオンのとき、Chrome はこれらを Google の同期サービスへ送り、同じアカウントでログインしている他の Chrome と共有します。<br>• この拡張が認証情報を送る先は bsky.social のみです。リンクカード有効時は対象 URL のメタデータを取得しますが、認証情報やユーザーデータは送信しません。<br>• アプリパスワードは Bluesky の 設定 → プライバシーとセキュリティ → アプリパスワード からいつでも無効化できます。',
     msgEmpty: "ハンドルと App Password を入力してください。",
     msgSaved: "保存しました。",
+    msgSaveFailed: "保存できませんでした: ",
     msgTesting: "接続テスト中...",
     msgExtError: "拡張エラー: ",
     msgSuccess: "接続成功 — ",
@@ -59,9 +60,10 @@ const i18n = {
     passwordHint: 'Bluesky → <strong>Settings</strong> → <strong>Privacy and security</strong> → <strong>App passwords</strong>',
     saveBtn: "Save",
     testBtn: "Test Connection",
-    securityNote: '<strong>Security</strong><br>• Credentials are stored in chrome.storage.local, accessible only by this extension.<br>• Credentials are sent only to bsky.social. When link cards are enabled, metadata is fetched from linked URLs, but no credentials or user data are sent.<br>• You can revoke the App Password anytime in Bluesky under Settings → Privacy and security → App passwords.',
+    securityNote: '<strong>Security</strong><br>• The handle and the App Password are stored in chrome.storage.local on this computer, accessible only by this extension.<br>• The other settings are stored in chrome.storage.sync. With Chrome sync on, Chrome sends them to Google\'s sync service and shares them with the other Chromes signed in to the same account.<br>• This extension sends the credentials only to bsky.social. When link cards are enabled, metadata is fetched from linked URLs, but no credentials or user data are sent.<br>• You can revoke the App Password anytime in Bluesky under Settings → Privacy and security → App passwords.',
     msgEmpty: "Please enter your handle and App Password.",
     msgSaved: "Saved.",
+    msgSaveFailed: "Could not save: ",
     msgTesting: "Testing connection...",
     msgExtError: "Extension error: ",
     msgSuccess: "Connected — ",
@@ -99,7 +101,9 @@ function t(key) {
   return translate(i18n, key);
 }
 
-// DEFAULT_SELECTORS, renderIcons, translate, applyMessages and errorText are provided by shared.js (loaded before this file).
+// DEFAULT_SELECTORS, renderIcons, translate, applyMessages and errorText are provided by shared.js, and
+// readSettings, writeSettings, removeSettings, linkCardsOn and LINK_CARD_PERMISSION by settings.js
+// (both loaded before this file).
 
 const SELECTOR_KEYS = Object.keys(DEFAULT_SELECTORS);
 
@@ -122,14 +126,28 @@ const postRepliesToggle = document.getElementById("postReplies");
 const removeInvalidMentionsToggle = document.getElementById("removeInvalidMentions");
 const includeLinkCardToggle = document.getElementById("includeLinkCard");
 const linkCardThumbnailToggle = document.getElementById("linkCardThumbnail");
+const behaviorMessageEl = document.getElementById("behaviorMessage");
 
 
 // ─── Load Settings ───────────────────────────────────────
 
-chrome.storage.local.get(
-  ["bskyHandle", "bskyAppPassword", "customSelectors", "includeQuoteUrl",
-   "postReplies", "removeInvalidMentions", "includeLinkCard", "linkCardThumbnail"],
-  (data) => {
+/**
+ * Show the stored behavior settings on their toggles. The link card toggle is on only where link cards
+ * are made in this Chrome (linkCardsOn): a stored includeLinkCard, which may come from another Chrome
+ * through Chrome sync, shows off here while this Chrome does not hold the permission, and stays stored.
+ */
+async function renderToggles() {
+  const data = await readSettings(["includeQuoteUrl", "postReplies", "removeInvalidMentions", "includeLinkCard", "linkCardThumbnail"]);
+  includeQuoteUrlToggle.checked = !!data.includeQuoteUrl;
+  postRepliesToggle.checked = !!data.postReplies;
+  removeInvalidMentionsToggle.checked = !!data.removeInvalidMentions;
+  linkCardThumbnailToggle.checked = data.linkCardThumbnail !== false;
+  includeLinkCardToggle.checked = await linkCardsOn(data);
+  updateLinkCardSubToggle();
+}
+
+Promise.all([
+  readSettings(["bskyHandle", "bskyAppPassword", "customSelectors"]).then((data) => {
     if (data.bskyHandle) handleInput.value = data.bskyHandle;
     if (data.bskyAppPassword) passwordInput.value = data.bskyAppPassword;
 
@@ -139,26 +157,9 @@ chrome.storage.local.get(
       const el = document.getElementById(`sel-${key}`);
       if (el) el.value = custom[key] || DEFAULT_SELECTORS[key];
     }
-
-    // Behavior toggles
-    includeQuoteUrlToggle.checked = !!data.includeQuoteUrl;
-    postRepliesToggle.checked = !!data.postReplies;
-    removeInvalidMentionsToggle.checked = !!data.removeInvalidMentions;
-
-    // Link card toggle: sync with actual permission state
-    linkCardThumbnailToggle.checked = data.linkCardThumbnail !== false;
-    chrome.permissions.contains({ origins: ["<all_urls>"] }, (hasPermission) => {
-      const cardEnabled = !!data.includeLinkCard;
-      // If storage says enabled but permission was revoked, correct the toggle
-      includeLinkCardToggle.checked = cardEnabled && hasPermission;
-      if (cardEnabled && !hasPermission) {
-        chrome.storage.local.set({ includeLinkCard: false });
-      }
-      updateLinkCardSubToggle();
-      applyMessages(i18n);
-    });
-  }
-);
+  }),
+  renderToggles(),
+]).finally(() => applyMessages(i18n));
 
 function updateLinkCardSubToggle() {
   linkCardThumbnailToggle.closest(".row").style.opacity = includeLinkCardToggle.checked ? "1" : "0.8";
@@ -172,6 +173,12 @@ function showMessage(el, text, isError = false) {
   el.className = `message ${isError ? "message--error" : "message--success"}`;
 }
 
+/** Empty `el` and hide it again. */
+function hideMessage(el) {
+  el.textContent = "";
+  el.className = "message";
+}
+
 saveBtn.addEventListener("click", () => {
   const handle = handleInput.value.trim();
   const password = passwordInput.value.trim();
@@ -181,9 +188,9 @@ saveBtn.addEventListener("click", () => {
     return;
   }
 
-  chrome.storage.local.set(
-    { bskyHandle: handle, bskyAppPassword: password },
-    () => showMessage(messageEl, t("msgSaved"))
+  writeSettings({ bskyHandle: handle, bskyAppPassword: password }).then(
+    () => showMessage(messageEl, t("msgSaved")),
+    (err) => showMessage(messageEl, t("msgSaveFailed") + err.message, true)
   );
 });
 
@@ -196,7 +203,7 @@ testBtn.addEventListener("click", () => {
     return;
   }
 
-  chrome.storage.local.set({ bskyHandle: handle, bskyAppPassword: password }, () => {
+  writeSettings({ bskyHandle: handle, bskyAppPassword: password }).then(() => {
     showMessage(messageEl, t("msgTesting"));
     chrome.runtime.sendMessage({ type: "TEST_LOGIN" }, (res) => {
       if (chrome.runtime.lastError) {
@@ -209,7 +216,7 @@ testBtn.addEventListener("click", () => {
         showMessage(messageEl, `${t("msgFail")}${errorText(res) || t("msgUnknown")}`, true);
       }
     });
-  });
+  }, (err) => showMessage(messageEl, t("msgSaveFailed") + err.message, true));
 });
 
 // ─── Selector Config ─────────────────────────────────────
@@ -220,9 +227,10 @@ saveSelectorsBtn.addEventListener("click", () => {
     const el = document.getElementById(`sel-${key}`);
     if (el) customSelectors[key] = el.value.trim();
   }
-  chrome.storage.local.set({ customSelectors }, () => {
-    showMessage(selectorMessageEl,t("msgSelectorsSaved"));
-  });
+  writeSettings({ customSelectors }).then(
+    () => showMessage(selectorMessageEl, t("msgSelectorsSaved")),
+    (err) => showMessage(selectorMessageEl, t("msgSaveFailed") + err.message, true)
+  );
 });
 
 resetSelectorsBtn.addEventListener("click", () => {
@@ -230,47 +238,61 @@ resetSelectorsBtn.addEventListener("click", () => {
     const el = document.getElementById(`sel-${key}`);
     if (el) el.value = DEFAULT_SELECTORS[key];
   }
-  chrome.storage.local.remove("customSelectors", () => {
-    showMessage(selectorMessageEl,t("msgSelectorsReset"));
-  });
+  removeSettings(["customSelectors"]).then(
+    () => showMessage(selectorMessageEl, t("msgSelectorsReset")),
+    (err) => showMessage(selectorMessageEl, t("msgSaveFailed") + err.message, true)
+  );
 });
 
 // ─── Behavior Toggles ───────────────────────────────────
 
+/**
+ * Store a toggle's setting. A write that sync refuses shows Chrome's reason under the toggles, which
+ * then show the stored settings again.
+ */
+function saveToggle(items) {
+  return writeSettings(items).then(
+    () => hideMessage(behaviorMessageEl),
+    (err) => {
+      showMessage(behaviorMessageEl, t("msgSaveFailed") + err.message, true);
+      return renderToggles();
+    }
+  );
+}
+
 includeQuoteUrlToggle.addEventListener("change", () => {
-  chrome.storage.local.set({ includeQuoteUrl: includeQuoteUrlToggle.checked });
+  saveToggle({ includeQuoteUrl: includeQuoteUrlToggle.checked });
 });
 
 postRepliesToggle.addEventListener("change", () => {
-  chrome.storage.local.set({ postReplies: postRepliesToggle.checked });
+  saveToggle({ postReplies: postRepliesToggle.checked });
 });
 
 removeInvalidMentionsToggle.addEventListener("change", () => {
-  chrome.storage.local.set({ removeInvalidMentions: removeInvalidMentionsToggle.checked });
+  saveToggle({ removeInvalidMentions: removeInvalidMentionsToggle.checked });
 });
 
 includeLinkCardToggle.addEventListener("change", () => {
   if (includeLinkCardToggle.checked) {
     // Request broad host permission so background.js can fetch OGP metadata
-    chrome.permissions.request({ origins: ["<all_urls>"] }, (granted) => {
+    chrome.permissions.request(LINK_CARD_PERMISSION, (granted) => {
       if (granted) {
-        chrome.storage.local.set({ includeLinkCard: true });
+        saveToggle({ includeLinkCard: true });
       } else {
-        // User denied — revert toggle
+        // User denied — revert the toggle, and leave the stored setting as it is
         includeLinkCardToggle.checked = false;
-        chrome.storage.local.set({ includeLinkCard: false });
       }
       updateLinkCardSubToggle();
     });
   } else {
-    chrome.storage.local.set({ includeLinkCard: false });
+    saveToggle({ includeLinkCard: false });
     // Optionally remove the broad permission when disabled
-    chrome.permissions.remove({ origins: ["<all_urls>"] });
+    chrome.permissions.remove(LINK_CARD_PERMISSION);
     updateLinkCardSubToggle();
   }
 });
 
 linkCardThumbnailToggle.addEventListener("change", () => {
-  chrome.storage.local.set({ linkCardThumbnail: linkCardThumbnailToggle.checked });
+  saveToggle({ linkCardThumbnail: linkCardThumbnailToggle.checked });
 });
 

@@ -1,6 +1,7 @@
 // content.js — Runs on x.com / twitter.com
 // Observes the post button click and sends text + images to background for Bluesky cross-posting.
-// DEFAULT_SELECTORS, translate and errorText are provided by shared.js (loaded before this file).
+// DEFAULT_SELECTORS, translate and errorText are provided by shared.js, and readSettings and
+// settingChanges by settings.js (both loaded before this file).
 
 (() => {
   "use strict";
@@ -39,9 +40,8 @@
     },
   };
 
-  // Load all settings from storage in a single call
-  chrome.storage.local.get(
-    ["customSelectors", "includeQuoteUrl", "postReplies", "bskyHandle", "crosspostEnabled"],
+  // Load all settings from storage
+  readSettings(["customSelectors", "includeQuoteUrl", "postReplies", "bskyHandle", "crosspostEnabled"]).then(
     (data) => {
       if (data.customSelectors) {
         selectors = { ...DEFAULT_SELECTORS, ...data.customSelectors };
@@ -54,8 +54,11 @@
     }
   );
 
-  // Keep state in sync when storage changes from any context (popup, options, etc.)
-  chrome.storage.onChanged.addListener((changes) => {
+  // Keep state in sync when the settings change from any context (popup, options, or another Chrome
+  // through Chrome sync). Each setting's change counts in the area it is kept in (settingChanges): the
+  // move to sync removing the copy an earlier version kept in chrome.storage.local is no change.
+  chrome.storage.onChanged.addListener((areaChanges, areaName) => {
+    const changes = settingChanges(areaChanges, areaName);
     if (changes.crosspostEnabled) {
       enabled = changes.crosspostEnabled.newValue !== false;
     }

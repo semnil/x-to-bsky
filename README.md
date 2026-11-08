@@ -37,6 +37,8 @@ Install it from the [Chrome Web Store](https://chromewebstore.google.com/detail/
 2. Enter your Bluesky handle and App Password
 3. Check with "Test Connection" → "Save"
 
+With Chrome sync on, the post options, the link card options and the selectors are carried to the other Chromes signed in to the same account. The handle and the App Password are not: enter them in each Chrome, so each Chrome can use its own Bluesky account.
+
 ### 4. Use it
 
 - Post on x.com as usual → it is posted to Bluesky at the same time
@@ -71,6 +73,7 @@ x-to-bsky/
 ├── manifest.json        # Manifest V3 configuration
 ├── background.js        # Service worker (Bluesky API)
 ├── shared.js            # Shared constants (DOM selectors)
+├── settings.js          # Where the settings are stored
 ├── content.js           # x.com content script
 ├── content.css          # Toast and badge styles
 ├── popup.html/js        # Toolbar popup (toggle)
@@ -82,8 +85,9 @@ x-to-bsky/
 
 ## Security
 
-- Credentials are stored in `chrome.storage.local`. Only this extension can access them
-- The only destination is `bsky.social` (with link cards enabled, the OGP metadata and thumbnail of the target URL are also fetched)
+- The handle and the App Password are stored in `chrome.storage.local` on this computer. Only this extension can access them
+- The other settings are stored in `chrome.storage.sync`. With Chrome sync on, Chrome sends them to Google's sync service to share them with the other Chromes signed in to the same account
+- The only destination the extension sends to is `bsky.social` (with link cards enabled, the OGP metadata and thumbnail of the target URL are also fetched)
 - The App Password can be revoked at any time in Bluesky's settings
 - Every source file is public. No third-party dependencies
 
@@ -94,7 +98,7 @@ x-to-bsky/
 - **Threads**: supported only when several posts are created at once with the "+" button. Adding to a thread by replying to an existing post is not supported
 - **Quote reposts**: only the comment text by default. Enabling it in the settings adds the X link of the quoted post
 - **Replies**: replies to existing posts are not cross-posted by default. Enabling "Post replies to Bluesky" in the settings cross-posts the reply text as a new post as well
-- **Link cards**: on posts with images, the images take priority (the two embeds cannot coexist). Sites without OGP get the page's title and description instead, and the card has no title if there is no title either. Web access permission is granted when the feature is enabled on the options page (removed automatically when it is disabled). Pages and thumbnail images whose URL names localhost, a private IP address or a similar local address are not fetched, and neither are Chrome Web Store pages and images (`chromewebstore.google.com` / `chrome.google.com`), which Chrome does not let extensions read; pages and images that redirect to another URL get no title, description or thumbnail
+- **Link cards**: on posts with images, the images take priority (the two embeds cannot coexist). Sites without OGP get the page's title and description instead, and the card has no title if there is no title either. Web access permission is granted when the feature is enabled on the options page (removed automatically when it is disabled there). The setting is synced, and the permission is checked in each Chrome: a Chrome without the permission makes no link card and shows the setting off until it is enabled there. Pages and thumbnail images whose URL names localhost, a private IP address or a similar local address are not fetched, and neither are Chrome Web Store pages and images (`chromewebstore.google.com` / `chrome.google.com`), which Chrome does not let extensions read; pages and images that redirect to another URL get no title, description or thumbnail
 - **Reposts**: they involve no text input, so the extension does nothing (intended)
 - **Mentions**: only handles that exist on Bluesky are resolved to DIDs. Enabling "Remove mentions that do not exist" in the settings removes the other `@handle` strings from the text before posting. A handle that could not be checked (network error, service error) is left in. If nothing is left to post, the post fails with a message
 
