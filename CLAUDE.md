@@ -96,7 +96,7 @@ sequenceDiagram
 - `shortenUrlsInText(text)`: converts the URLs in text over 300 graphemes to a shortened display. Removes `http(s)://` and replaces whatever exceeds `URL_DISPLAY_LIMIT` graphemes with `...`. Returns `{ text, urlEntries }`
 - `buildShortenedUrlFacets(text, urlEntries)`: generates the facets for shortened URLs. `uri` keeps the original URL
 - `parseFacets(text)`: no lookbehind. Detects boundaries with `(^|\s)` and corrects the offsets
-- `findMentions(text)` / `removeMentions(text, mentions)`: the `@handle` ranges in text (same pattern as `parseFacets`), and the text without the given ranges and the spaces that separated them from the text around
+- `findMentions(text)` / `removeMentions(text, mentions)`: the `@name` ranges in text, and the text without the given ranges and the spaces that separated them from the text around. A name is a run of letters, digits, `_`, `.` and `-` without a trailing `.` or `-`, so an X username with `_` is found whole
 - `extractFirstUrl(text)`: finds the first URL in the text (removing trailing punctuation)
 - `calcCoverRect(nw, nh, dw, dh, objectPosition)`: computes the visible-area crop for `object-fit: cover` (pure function; the same algorithm as `getVisibleRect` in content.js)
 - `isPublicHttpUrl(url)`: whether a URL is http(s) with a host, as written in the URL, outside the user's machine and local network. Rejects `localhost` / `*.localhost` / `*.local`, single-label names, and IP literals in the unspecified, private, shared (CGNAT), loopback, link-local, site-local and unique-local ranges, including IPv4-mapped IPv6

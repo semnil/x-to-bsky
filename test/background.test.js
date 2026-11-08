@@ -41,11 +41,16 @@ function post(text) {
   });
 }
 
+/** Cross-post `thread` and return the whole response. */
+function postThreadResponse(thread) {
+  return new Promise((resolve) => {
+    listener({ type: "POST_TO_BSKY", thread }, {}, resolve);
+  });
+}
+
 /** Cross-post `text` and return the whole response. */
 function postResponse(text) {
-  return new Promise((resolve) => {
-    listener({ type: "POST_TO_BSKY", thread: [{ text, images: [] }] }, {}, resolve);
-  });
+  return postThreadResponse([{ text, images: [] }]);
 }
 
 const html = (props) =>
@@ -224,6 +229,33 @@ describe("removing mentions that do not exist", () => {
     handles["down.test"] = "unavailable";
     const record = await post("@flaky.test @down.test hi");
     expect(record.text).toBe("@flaky.test @down.test hi");
+  });
+
+  it("removes an X username with underscores whole", async () => {
+    store.removeInvalidMentions = true;
+    const record = await post("hello @foo_bar @_foobar @foobar_ world");
+    expect(record.text).toBe("hello world");
+    expect(handleLookups).toContain("foo_bar");
+  });
+
+  it("keeps the images of a post whose text is left empty", async () => {
+    store.removeInvalidMentions = true;
+    const image = { base64: "data:image/png;base64,SU1BR0U=", mimeType: "image/png", width: 2, height: 1 };
+    const res = await postThreadResponse([{ text: "@foo_bar", images: [image] }]);
+    expect(res.ok).toBe(true);
+    expect(records).toHaveLength(1);
+    expect(records[0].record.text).toBe("");
+    expect(records[0].record.embed.images).toHaveLength(1);
+    expect(uploads).toEqual(["IMAGE"]);
+  });
+
+  it("starts the thread at the next post when the first is left empty", async () => {
+    store.removeInvalidMentions = true;
+    const res = await postThreadResponse([{ text: "@foo_bar", images: [] }, { text: "next", images: [] }]);
+    expect(res.ok).toBe(true);
+    expect(res.postCount).toBe(1);
+    expect(records.map((r) => r.record.text)).toEqual(["next"]);
+    expect(records[0].record.reply).toBeUndefined();
   });
 
   it("fails with a message when no text is left", async () => {

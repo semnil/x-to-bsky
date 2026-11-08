@@ -154,9 +154,6 @@ function cleanUrlMatch(raw) {
 
 // ─── Facet Parsing (no lookbehind) ──────────────────────
 
-// (start-of-string | whitespace) followed by @handle; group 1 is the boundary, 2 the mention, 3 the handle
-const MENTION_RE_GLOBAL = /(^|\s)(@([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*))/gm;
-
 /**
  * Parse rich text facets (links, mentions, hashtags).
  * Uses boundary-aware matching without lookbehind assertions.
@@ -180,8 +177,8 @@ function parseFacets(text) {
 
   // Mention detection: (start-of-string | whitespace) followed by @handle
   // The did field temporarily holds the handle; resolveMentionFacets replaces it with the actual DID
-  MENTION_RE_GLOBAL.lastIndex = 0;
-  while ((match = MENTION_RE_GLOBAL.exec(text)) !== null) {
+  const mentionRegex = /(^|\s)(@([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*))/gm;
+  while ((match = mentionRegex.exec(text)) !== null) {
     const mentionStart = match.index + match[1].length;
     const mention = match[2]; // @handle
     facets.push({
@@ -204,16 +201,21 @@ function parseFacets(text) {
   return facets;
 }
 
+// (start-of-string | whitespace) followed by @ and a run of letters, digits, "_", "." and "-" that starts and
+// ends with a letter, digit or "_": a Bluesky handle or an X username, without a trailing "." or "-"
+const MENTION_TOKEN_RE_GLOBAL = /(^|\s)(@([A-Za-z0-9_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?))/gm;
+
 /**
- * Find the mentions in text, in order of appearance.
+ * Find the mentions in text, in order of appearance. A mention is the whole "@name" token,
+ * including the "_" an X username may contain, so a token that is not a valid handle is found whole.
  * @param {string} text
- * @returns {Array<{ handle: string, start: number, end: number }>} `start` / `end` are string indices of "@handle"
+ * @returns {Array<{ handle: string, start: number, end: number }>} `start` / `end` are string indices of "@name"
  */
 function findMentions(text) {
   const mentions = [];
-  MENTION_RE_GLOBAL.lastIndex = 0;
+  MENTION_TOKEN_RE_GLOBAL.lastIndex = 0;
   let match;
-  while ((match = MENTION_RE_GLOBAL.exec(text)) !== null) {
+  while ((match = MENTION_TOKEN_RE_GLOBAL.exec(text)) !== null) {
     const start = match.index + match[1].length;
     mentions.push({ handle: match[3], start, end: start + match[2].length });
   }

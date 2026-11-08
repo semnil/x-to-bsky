@@ -520,8 +520,6 @@ describe("parseFacets", () => {
   });
 });
 
-// ─── calcCoverRect ──────────────────────────────────────
-
 describe("findMentions", () => {
   it("returns the handle and the index range of each mention", () => {
     const text = "hi @alice.test and @bob";
@@ -534,7 +532,20 @@ describe("findMentions", () => {
     expect(findMentions("mail me at a@b.com")).toEqual([]);
   });
 
-  it("finds the same mentions as parseFacets", () => {
+  it("finds an X username with underscores whole", () => {
+    expect(findMentions("@foo_bar @_foobar @foobar_").map((m) => m.handle)).toEqual(["foo_bar", "_foobar", "foobar_"]);
+  });
+
+  it("finds a handle followed by an underscore whole", () => {
+    expect(findMentions("see @alice.test_x now").map((m) => m.handle)).toEqual(["alice.test_x"]);
+  });
+
+  it("leaves a trailing dot or hyphen out of the mention", () => {
+    const text = "thanks @alice.test. and @bob-";
+    expect(findMentions(text).map((m) => text.slice(m.start, m.end))).toEqual(["@alice.test", "@bob"]);
+  });
+
+  it("finds the same valid handles as parseFacets", () => {
     const text = "@a.test x @b.test\n@c";
     const facets = parseFacets(text).filter((f) => f.features[0].$type === FACET_MENTION);
     expect(findMentions(text).map((m) => m.handle)).toEqual(facets.map((f) => f.features[0].did));
@@ -565,6 +576,11 @@ describe("removeMentions", () => {
     expect(remove("@ghost hi @alice.test @ghost2", ["ghost", "ghost2"])).toBe("hi @alice.test");
   });
 
+  it("removes an X username with underscores whole", () => {
+    expect(remove("hello @foo_bar world", ["foo_bar"])).toBe("hello world");
+    expect(remove("hello @foobar_ world", ["foobar_"])).toBe("hello world");
+  });
+
   it("removes adjacent mentions", () => {
     expect(remove("@a @b hi", ["a", "b"])).toBe("hi");
   });
@@ -577,6 +593,8 @@ describe("removeMentions", () => {
     expect(remove("@ghost", ["ghost"])).toBe("");
   });
 });
+
+// ─── calcCoverRect ──────────────────────────────────────
 
 describe("calcCoverRect", () => {
   describe("landscape image in landscape container (same ratio)", () => {
