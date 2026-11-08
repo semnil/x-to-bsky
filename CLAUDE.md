@@ -28,7 +28,7 @@ x-to-bsky/
 ├── test/icons.test.js   # Vitest: the UI files contain no emoji, and the icon names they use exist in shared.js
 ├── test/hints.test.js   # Vitest: every element of class `hint` in popup.html / options.html gets the same font size and color declared in the page itself (its `<style>` rules or a style attribute), read from the markup without a browser; the thumbnail hint keeps 3:1 on the page background at the opacity options.js gives its row while link cards are off
 ├── test/i18n.test.js    # Vitest: popup.html / options.html / content.js use only messages that exist in Japanese and English, the pages show Japanese only as the fallback of translated elements, and every error code thrown in background.js has a message
-├── test/session.test.js # Vitest: background.js refreshes the cached session while the stored handle and App Password stay the same, and logs in again once either changes, with chrome / fetch stubbed
+├── test/session.test.js # Vitest: background.js refreshes the cached session while the stored handle and App Password stay the same, logs in again once either changes, and shares an authentication in flight only with calls for the same credentials, with chrome / fetch stubbed
 ├── test/release.test.js # Vitest: structure of the Release / Tag release workflows and the scripts in tools/
 ├── test/contrast.test.js # Vitest: WCAG 2.1 contrast of the color pairs the stylesheets declare: toast and options button text 4.5:1, toggle knob against the ON track 3:1
 ├── test/badge.test.js   # Vitest: content.js / content.css run in headless Chrome on a stand-in post button; the badge is filled with the page's background color and follows it. Chrome is taken from CHROME_PATH or the usual install path, and the cases are skipped by name without one
@@ -75,7 +75,7 @@ sequenceDiagram
 
 ### background.js
 
-- `createSession()`: authentication + session cache. The cached session is refreshed only while the stored handle and App Password are the ones it was logged in with; otherwise it logs in again with the stored ones. A clear error message on 401
+- `createSession()`: authentication + session cache. The cached session is refreshed only while the stored handle and App Password are the ones it was logged in with; otherwise it logs in again with the stored ones. A call shares the authentication in flight for the same credentials, and with other credentials authenticates once that one has ended. A clear error message on 401
 - Errors are thrown as `CodedError` with a `code` and the API's reason as `detail`, and a failed response carries both. The extension pages turn them into Japanese or English text with `ERROR_MESSAGES` in shared.js
 - `lookupHandle(handle)`: asks `resolveHandle`; the DID, null when the service answers HTTP 400 (the handle does not resolve), and undefined when it could not be asked or failed
 - `resolveMentionFacets()`: resolves mention handles → DIDs

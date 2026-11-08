@@ -25,19 +25,18 @@ let sessionCredentials = null;
 
 // ─── Authentication ──────────────────────────────────────
 
-// Deduplicate concurrent createSession calls (V05)
-let sessionPromise = null;
+// The authentication in flight and the credentials it is for; calls with the same credentials share it (V05)
+let authenticating = null;
 
 /**
- * Authenticate with Bluesky. Reuses cached session via refreshSession while the stored handle and
- * App Password are the ones it was logged in with; otherwise logs in again with the stored ones.
+ * Authenticate with Bluesky with the stored handle and App Password. Reuses cached session via
+ * refreshSession while they are the ones it was logged in with; otherwise logs in again with them.
  * On failure, clears cache and performs fresh login with clear error messages.
- * Concurrent calls share the same in-flight promise.
+ * A call shares the authentication in flight for the same credentials; with other credentials, it
+ * authenticates once that one has ended.
  */
 function createSession() {
-  if (sessionPromise) return sessionPromise;
-  sessionPromise = _createSession().finally(() => { sessionPromise = null; });
-  return sessionPromise;
+  return _createSession();
 }
 
 /**
@@ -67,8 +66,36 @@ async function _createSession() {
     throw new CodedError("notConfigured");
   }
 
+  return authenticate({ handle: bskyHandle, password: bskyAppPassword });
+}
+
+/** Whether `a` and `b` are the same handle and App Password. */
+function sameCredentials(a, b) {
+  return !!a && !!b && a.handle === b.handle && a.password === b.password;
+}
+
+/**
+ * The authentication with `credentials`: the one in flight where it is for the same credentials,
+ * otherwise a new one, started once the one in flight has ended.
+ */
+function authenticate(credentials) {
+  if (authenticating && sameCredentials(authenticating.credentials, credentials)) return authenticating.promise;
+  const previous = authenticating ? authenticating.promise.catch(() => {}) : Promise.resolve();
+  const current = { credentials, promise: previous.then(() => refreshOrLogin(credentials)) };
+  const clear = () => { if (authenticating === current) authenticating = null; };
+  current.promise.then(clear, clear);
+  authenticating = current;
+  return current.promise;
+}
+
+/**
+ * Refresh the cached session where it was logged in with `credentials`, otherwise log in with them.
+ */
+async function refreshOrLogin(credentials) {
+  const { handle: bskyHandle, password: bskyAppPassword } = credentials;
+
   // A session logged in with other credentials is not reused
-  if (sessionCredentials?.handle !== bskyHandle || sessionCredentials?.password !== bskyAppPassword) {
+  if (!sameCredentials(sessionCredentials, credentials)) {
     session = null;
   }
 
@@ -116,7 +143,7 @@ async function _createSession() {
   }
 
   session = await res.json();
-  sessionCredentials = { handle: bskyHandle, password: bskyAppPassword };
+  sessionCredentials = credentials;
   return session;
 }
 
