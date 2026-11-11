@@ -172,6 +172,10 @@ Manual testing in the browser:
 15. Turn on "Remove mentions that do not exist" and post `hello @no-such-handle.invalid` → check that Bluesky shows `hello`; a mention of an existing handle stays a link
 16. In two Chromes signed in to the same account with sync on, change a post option in one → check that the other Chrome's options page shows it, and that the handle and the App Password are not carried over
 
+Before testing the folder loaded unpacked, disable the copy installed from the Chrome Web Store in `chrome://extensions`. While the store copy is enabled, it runs on x.com as well, and what a post shows can come from its code instead of the changed code.
+
+A change to what the popup, the options page, the badge or the toast shows also needs the screenshots of the Chrome Web Store listing remade. They are made outside this repository, and no test notices when they are out of date.
+
 ## Build
 
 ```bash
