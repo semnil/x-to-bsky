@@ -23,6 +23,7 @@ x-to-bsky/
 ├── icons/               # 16/48/128px PNG
 ├── _locales/            # ja / en messages for the extension name and description (__MSG_*__ in manifest.json); default_locale is en, so any other browser language gets the English ones
 ├── .github/workflows/   # GitHub Actions workflows
+├── docs/decisions/      # Records of closed decisions, one file per subject (EN; JA is <subject>.ja.md)
 ├── build.sh             # zip packaging
 ├── test/lib.test.js     # Vitest unit tests (lib.js)
 ├── test/background.test.js # Vitest: link card fetch destinations, the removal of mentions that do not exist, the move of the settings into sync when it starts, and where it reads the settings, with background.js driven through its message listener and chrome / fetch stubbed
@@ -130,6 +131,7 @@ sequenceDiagram
 - **Override of the global CLAUDE.md's 「ドキュメント」 language rule**: this file is written entirely in English, and the README is maintained in English and Japanese, English first: `README.md` / `README.ja.md`. The pair cross-links at the top and keeps the same sections in the same order
 - `PRIVACY_POLICY.md` keeps its path because the Chrome Web Store listing links to it by path (`https://raw.githubusercontent.com/semnil/x-to-bsky/master/PRIVACY_POLICY.md`). `PRIVACY_POLICY_JA.md` keeps its name because `PRIVACY_POLICY.md` points at it
 - `CLAUDE.md` is English only and has no Japanese counterpart
+- `docs/decisions/` holds the records of closed decisions (what was decided, why, and what was rejected), English at `<subject>.md` with the Japanese counterpart at `<subject>.ja.md`. The pair cross-links at the top and keeps the same sections in the same order. The other documents describe the current state only
 - Commit messages and PR titles and bodies are written in English, with the Conventional Commits prefixes the history uses (`feat:` / `fix:` / `refactor:` / `docs:` / `ci:` / `chore:` / `test:`). Earlier commits written in Japanese are not rewritten
 
 ## Known limitations
