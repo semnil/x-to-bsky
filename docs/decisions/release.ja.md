@@ -2,7 +2,7 @@
 
 > For the English version, see [release.md](release.md).
 
-リリースと版番号について閉じた判断。リリースの手順そのものは `CLAUDE.md` の「Build」にある。
+リリースと版番号について閉じた判断。リリースの手順そのものは `AGENTS.md` の「Build」にある。
 
 ## 変更履歴のファイルを置かない
 

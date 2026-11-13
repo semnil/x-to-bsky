@@ -2,7 +2,7 @@
 
 > 日本語版は [language.ja.md](language.ja.md) を参照してください.
 
-Closed decisions about the language of the documents and of the extension's own texts. The rules in force are in the "Documentation and language" section of `CLAUDE.md`.
+Closed decisions about the language of the documents and of the extension's own texts. The rules in force are in the "Documentation and language" section of `AGENTS.md`.
 
 ## Documents, commits and pull requests are in English
 

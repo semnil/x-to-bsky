@@ -2,7 +2,7 @@
 
 > For the English version, see [language.md](language.md).
 
-文書の言語と、拡張機能自身の文言の言語について閉じた判断。今有効な規則は `CLAUDE.md` の「Documentation and language」にある。
+文書の言語と、拡張機能自身の文言の言語について閉じた判断。今有効な規則は `AGENTS.md` の「Documentation and language」にある。
 
 ## 文書・コミット・PR は英語で書く
 

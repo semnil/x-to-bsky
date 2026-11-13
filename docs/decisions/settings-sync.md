@@ -2,7 +2,7 @@
 
 > 日本語版は [settings-sync.ja.md](settings-sync.ja.md) を参照してください.
 
-Closed decisions about which settings Chrome sync carries. How the settings are stored is in the "Credential storage" section of `CLAUDE.md`.
+Closed decisions about which settings Chrome sync carries. How the settings are stored is in the "Credential storage" section of `AGENTS.md`.
 
 ## The handle and the App Password are not synced
 

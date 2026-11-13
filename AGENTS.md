@@ -1,4 +1,4 @@
-# CLAUDE.md — X to Bluesky Crossposter
+# AGENTS.md — X to Bluesky Crossposter
 
 ## Project overview
 
@@ -43,7 +43,7 @@ x-to-bsky/
 ├── package.json         # dev dependencies (vitest)
 ├── PRIVACY_POLICY.md    # Privacy policy (EN; JA is PRIVACY_POLICY_JA.md)
 ├── README.md            # Setup steps and description of the behavior (EN; JA is README.ja.md)
-└── CLAUDE.md            # This file
+└── AGENTS.md            # This file
 ```
 
 ## Architecture
@@ -130,7 +130,7 @@ sequenceDiagram
 
 - **Override of the global CLAUDE.md's 「ドキュメント」 language rule**: this file is written entirely in English, and the README is maintained in English and Japanese, English first: `README.md` / `README.ja.md`. The pair cross-links at the top and keeps the same sections in the same order
 - `PRIVACY_POLICY.md` keeps its path because the Chrome Web Store listing links to it by path (`https://raw.githubusercontent.com/semnil/x-to-bsky/master/PRIVACY_POLICY.md`). `PRIVACY_POLICY_JA.md` keeps its name because `PRIVACY_POLICY.md` points at it
-- `CLAUDE.md` is English only and has no Japanese counterpart
+- `AGENTS.md` is English only and has no Japanese counterpart
 - `docs/decisions/` holds the records of closed decisions (what was decided, why, and what was rejected), English at `<subject>.md` with the Japanese counterpart at `<subject>.ja.md`. The pair cross-links at the top and keeps the same sections in the same order. The other documents describe the current state only
 - Commit messages and PR titles and bodies are written in English, with the Conventional Commits prefixes the history uses (`feat:` / `fix:` / `refactor:` / `docs:` / `ci:` / `chore:` / `test:`). Earlier commits written in Japanese are not rewritten
 
