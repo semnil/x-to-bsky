@@ -2,7 +2,7 @@
 
 > 日本語版は [release.ja.md](release.ja.md) を参照してください.
 
-Closed decisions about releases and version numbers. The release steps themselves are in the "Build" section of `CLAUDE.md`.
+Closed decisions about releases and version numbers. The release steps themselves are in the "Build" section of `AGENTS.md`.
 
 ## The repository keeps no changelog file
 

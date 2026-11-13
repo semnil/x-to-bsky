@@ -2,7 +2,7 @@
 
 > For the English version, see [settings-sync.md](settings-sync.md).
 
-Chrome の同期がどの設定を運ぶかについて閉じた判断。設定の保存のしかたは `CLAUDE.md` の「Credential storage」にある。
+Chrome の同期がどの設定を運ぶかについて閉じた判断。設定の保存のしかたは `AGENTS.md` の「Credential storage」にある。
 
 ## ハンドルと App Password は同期しない
 
