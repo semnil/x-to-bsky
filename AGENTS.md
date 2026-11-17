@@ -153,6 +153,8 @@ npm install   # first time only
 npm test      # vitest run — lib and settings unit tests, background.js and the pages on stubbed chrome APIs, the icon / i18n / contrast / workflow-structure checks, and the badge in headless Chrome
 ```
 
+Vitest excludes `.github/tests/`; the `Issue auto-assignment` workflow runs its Node tests with `node --test .github/tests/issue-auto-assign.test.cjs` on pull requests.
+
 Manual testing in the browser:
 
 1. Install from the Chrome Web Store, or `chrome://extensions` → Developer mode → load the folder
